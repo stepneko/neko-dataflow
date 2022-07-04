@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+
+	"github.com/stepneko/neko-dataflow/timestamp"
 )
 
 type VertexType int
@@ -18,6 +21,12 @@ const (
 
 // Vertex is the interface that represents a vertex in the computing graph.
 type Vertex interface {
+	// Set Id of the vertex.
+	SetId(int)
+	// Get Id of the vertex.
+	GetId() int
+	// Get Type of the vertex.
+	GetType() VertexType
 	// SetExtChan sets the chan handle sending requests to scheduler.
 	SetExtChan(chan Request)
 	// GetExtChan gets the chan handle sending requests to scheduler.
@@ -35,12 +44,17 @@ type Vertex interface {
 	// Handle triggers the callbacks with request.
 	Handle(ctx context.Context, req *Request) error
 	// HandleTimestamp handles timestamp since the vertex could be ingress, egress or feedback.
-	HandleTimestamp(ts *Timestamp) error
+	HandleTimestamp(ts *timestamp.Timestamp) error
+	// SendBy is a wrapper that triggers the CallbackType_SendBy function
+	SendBy(e Edge, m Message, ts timestamp.Timestamp) error
+	// NotifyAt is a wrapper that triggers the CallbackType_NotifyAt function
+	NotifyAt(ts timestamp.Timestamp) error
 	// Start starts a runtime for the vertex to handle dataflow.
-	Start(ctx context.Context) error
+	Start(ctx context.Context, wg sync.WaitGroup) error
 }
 
 type GenericVertex struct {
+	id         int
 	vertexType VertexType
 	extCh      chan Request
 	inTaskCh   chan Request
@@ -50,6 +64,7 @@ type GenericVertex struct {
 
 func NewGenericVertex() *GenericVertex {
 	return &GenericVertex{
+		id:         0,
 		vertexType: VertexType_Generic,
 		extCh:      nil,
 		inTaskCh:   nil,
@@ -58,7 +73,8 @@ func NewGenericVertex() *GenericVertex {
 	}
 }
 
-func (v *GenericVertex) Start(ctx context.Context) error {
+func (v *GenericVertex) Start(ctx context.Context, wg sync.WaitGroup) error {
+	defer wg.Done()
 	for {
 		select {
 		case req := <-v.GetInTaskChan():
@@ -67,6 +83,18 @@ func (v *GenericVertex) Start(ctx context.Context) error {
 			return nil
 		}
 	}
+}
+
+func (v *GenericVertex) SetId(id int) {
+	v.id = id
+}
+
+func (v *GenericVertex) GetId() int {
+	return v.id
+}
+
+func (v *GenericVertex) GetType() VertexType {
+	return v.vertexType
 }
 
 func (v *GenericVertex) SetExtChan(ch chan Request) {
@@ -102,7 +130,7 @@ func (v *GenericVertex) On(typ CallbackType, cb Callback) error {
 	return nil
 }
 
-// Handle runs a function that has been registered by On()
+// Handle runs a function that has been registered by On().
 func (v *GenericVertex) Handle(ctx context.Context, req *Request) error {
 	typ := req.GetType()
 	ts := req.GetTimestamp()
@@ -114,34 +142,41 @@ func (v *GenericVertex) Handle(ctx context.Context, req *Request) error {
 		return errors.New(fmt.Sprintf("function type %d not registered by triggered", typ))
 	}
 
-	// Handle things internally before triggering callback
+	// Handle things internally before triggering callback.
 	v.PreFn(ctx, typ, e, &ts)
 
-	// Trigger the callback
-	fn(e, m, ts)
+	// Handle timestamp here when doing OnRecv or OnNotify.
+	// This is for Ingress, Egress and Feedback vertices.
+	newTs := timestamp.CopyTimestampFrom(&ts)
+	if typ == CallbackType_OnRecv || typ == CallbackType_OnNotify {
+		v.HandleTimestamp(newTs)
+	}
 
-	// Handle things internally after triggering callback
+	// Trigger the callback for next data step.
+	fn(e, m, *newTs)
+
+	// Handle things internally after triggering callback.
 	v.PostFn(ctx, typ, e, &ts)
 
 	return nil
 }
 
-func (v GenericVertex) HandleTimestamp(ts *Timestamp) error {
+func (v GenericVertex) HandleTimestamp(ts *timestamp.Timestamp) error {
 	typ := v.vertexType
 	if typ == VertexType_Ingress {
-		ts.counters = append(ts.counters, 0)
+		ts.Counters = append(ts.Counters, 0)
 	} else if typ == VertexType_Egress {
-		l := len(ts.counters)
+		l := len(ts.Counters)
 		if l == 0 {
 			return errors.New("timestamp handling error in egress vertex. Counter already empty so cannot pop")
 		}
-		ts.counters = ts.counters[:l-1]
+		ts.Counters = ts.Counters[:l-1]
 	} else if typ == VertexType_Feedback {
-		l := len(ts.counters)
+		l := len(ts.Counters)
 		if l == 0 {
 			return errors.New("timestamp handling error in feedback vertex. Counter already empty")
 		}
-		ts.counters[l-1] += 1
+		ts.Counters[l-1] += 1
 	}
 	return nil
 }
@@ -150,11 +185,11 @@ func (v *GenericVertex) PreFn(
 	ctx context.Context,
 	typ CallbackType,
 	e Edge,
-	ts *Timestamp,
+	ts *timestamp.Timestamp,
 ) {
 	// According to the paper, in PreFn, there are two things to do with OC:
-	// When doing SendBy, OC[(t, e)] <- OC[(t, e)] + 1
-	// When doing NotifyAt, OC[(t, v)] <- OC[(t, v)] + 1
+	// When doing SendBy, OC[(t, e)] <- OC[(t, e)] + 1.
+	// When doing NotifyAt, OC[(t, v)] <- OC[(t, v)] + 1.
 	if typ == CallbackType_SendBy || typ == CallbackType_NotifyAt {
 		v.extCh <- *NewRequest(
 			CallbackType_IncreOC,
@@ -170,19 +205,24 @@ func (v *GenericVertex) PreFn(
 		}
 
 	}
-
-	// Handle timestamp here when doing OnRecv or OnNotify
-	if typ == CallbackType_OnRecv || typ == CallbackType_OnNotify {
-		v.HandleTimestamp(ts)
-	}
 }
 
 func (v *GenericVertex) PostFn(
 	ctx context.Context,
 	typ CallbackType,
 	e Edge,
-	ts *Timestamp,
+	ts *timestamp.Timestamp,
 ) {
+
+	// If the vertex is an input vertex, then the OnRecv is triggered
+	// an external data source.
+	// In this case we don't change OC in the graph.
+	if typ == CallbackType_OnRecv && v.GetType() == VertexType_Input {
+		return
+	}
+
+	// If the vertex is an input vertex, then the OnRecv call should be triggered
+	// by external data source. Therefore
 	// According to the paper, in PostFn, there are two things to do with OC:
 	// When doing OnRecv, OC[(t, e)] <- OC[(t, e)] - 1
 	// When doing OnNotify, OC[(t, v)] <- OC[(t, v)] - 1
@@ -200,4 +240,20 @@ func (v *GenericVertex) PostFn(
 			return
 		}
 	}
+}
+
+func (v *GenericVertex) SendBy(e Edge, m Message, ts timestamp.Timestamp) error {
+	fn, exist := v.callbacks[CallbackType_SendBy]
+	if !exist {
+		return errors.New("vertex has not set up SendBy function yet")
+	}
+	return fn(e, m, ts)
+}
+
+func (v *GenericVertex) NotifyAt(ts timestamp.Timestamp) error {
+	fn, exist := v.callbacks[CallbackType_NotifyAt]
+	if !exist {
+		return errors.New("vertex has not set up NotifyAt function yet")
+	}
+	return fn(NewEdge(v, v), Message{}, ts)
 }

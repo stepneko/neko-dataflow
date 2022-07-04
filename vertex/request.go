@@ -1,24 +1,28 @@
 package vertex
 
+import (
+	"github.com/stepneko/neko-dataflow/timestamp"
+)
+
 // Request represents a call between vertices and scheduler.
 type Request struct {
 	typ CallbackType
 	e   Edge
-	ts  Timestamp
-	msg Message
+	ts  timestamp.Timestamp
+	m   Message
 }
 
 func NewRequest(
 	typ CallbackType,
 	e Edge,
-	ts Timestamp,
-	msg Message,
+	ts timestamp.Timestamp,
+	m Message,
 ) *Request {
 	return &Request{
 		typ: typ,
 		e:   e,
 		ts:  ts,
-		msg: msg,
+		m:   m,
 	}
 }
 
@@ -30,10 +34,10 @@ func (r *Request) GetEdge() Edge {
 	return r.e
 }
 
-func (r *Request) GetTimestamp() Timestamp {
+func (r *Request) GetTimestamp() timestamp.Timestamp {
 	return r.ts
 }
 
 func (r *Request) GetMessage() Message {
-	return r.msg
+	return r.m
 }

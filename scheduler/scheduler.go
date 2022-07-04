@@ -5,10 +5,12 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/stepneko/neko-dataflow/timestamp"
 	"github.com/stepneko/neko-dataflow/vertex"
 )
 
 type Scheduler interface {
+	CreateVertexId() int
 	RegisterVertex(v vertex.Vertex) error
 	BuildEdge() error
 	Step() error
@@ -16,6 +18,7 @@ type Scheduler interface {
 }
 
 type SimpleScheduler struct {
+	nextId    int
 	ch        chan vertex.Request
 	vertexMap map[vertex.Vertex]*VertexStatus
 	frontier  []vertex.Vertex
@@ -25,6 +28,7 @@ type SimpleScheduler struct {
 // NewScheduler returns a simple scheduler of neko-dataflow
 func NewScheduler() *SimpleScheduler {
 	return &SimpleScheduler{
+		nextId:    0,
 		ch:        make(chan vertex.Request, 1024),
 		vertexMap: make(map[vertex.Vertex]*VertexStatus),
 		frontier:  []vertex.Vertex{},
@@ -32,27 +36,35 @@ func NewScheduler() *SimpleScheduler {
 	}
 }
 
+func (s *SimpleScheduler) CreateVertexId() int {
+	id := s.nextId
+	s.nextId += 1
+	return id
+}
+
 func (s *SimpleScheduler) RegisterVertex(v vertex.Vertex) {
 	// Insert the vertex into scheduler
 	s.graph.InsertVertex(v)
+	// Set up id by scheduler
+	v.SetId(s.CreateVertexId())
 	// Set up channel into scheduler
 	v.SetExtChan(s.ch)
-	v.On(vertex.CallbackType_SendBy, func(e vertex.Edge, msg vertex.Message, ts vertex.Timestamp) error {
+	v.On(vertex.CallbackType_SendBy, func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
 		v.GetExtChan() <- *vertex.NewRequest(
 			vertex.CallbackType_SendBy,
 			e,
 			ts,
-			msg,
+			m,
 		)
 		return nil
 	})
 
-	v.On(vertex.CallbackType_NotifyAt, func(e vertex.Edge, msg vertex.Message, ts vertex.Timestamp) error {
+	v.On(vertex.CallbackType_NotifyAt, func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
 		v.GetExtChan() <- *vertex.NewRequest(
 			vertex.CallbackType_NotifyAt,
 			vertex.NewEdge(v, v), // Since NotifyAt is calling at a vertex itself, just set the edge to be itself.
 			ts,
-			msg,
+			m,
 		)
 		return nil
 	})
@@ -88,20 +100,23 @@ func (s *SimpleScheduler) BuildEdge(
 	return e, nil
 }
 
+// TODO Step is for finer control of scheduler.
 func (s *SimpleScheduler) Step() error {
 	return nil
 }
 
-// Run starts the scheduler after all vertices are registered
-// This also gives scheduler an opportunity to optimize the graph
+// Run starts the scheduler after all vertices are registered.
+// This also pre-processes and optimizes the graph.
 func (s *SimpleScheduler) Run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	s.graph.PreProcess()
+
 	var wg sync.WaitGroup
 	for v := range s.vertexMap {
 		wg.Add(1)
-		go v.Start(ctx)
+		go v.Start(ctx, wg)
 	}
 
 	go s.Serve(ctx)
@@ -140,15 +155,15 @@ func (s *SimpleScheduler) HandleReq(req *vertex.Request) error {
 
 func (s *SimpleScheduler) IncreOC(req *vertex.Request) error {
 	ts := req.GetTimestamp()
-	var ps vertex.Pointstamp
+	var ps Pointstamp
 	e := req.GetEdge()
 	if e.GetSrc() == e.GetTarget() {
-		ps = vertex.NewVertexPointStamp(
+		ps = NewVertexPointStamp(
 			e.GetSrc(),
 			&ts,
 		)
 	} else {
-		ps = vertex.NewEdgePointStamp(
+		ps = NewEdgePointStamp(
 			e,
 			&ts,
 		)
@@ -157,7 +172,7 @@ func (s *SimpleScheduler) IncreOC(req *vertex.Request) error {
 	s.vertexMap[e.GetSrc()].ackChan <- *vertex.NewRequest(
 		vertex.CallbackType_Ack,
 		nil,
-		vertex.Timestamp{},
+		timestamp.Timestamp{},
 		vertex.Message{},
 	)
 	return nil
@@ -165,24 +180,24 @@ func (s *SimpleScheduler) IncreOC(req *vertex.Request) error {
 
 func (s *SimpleScheduler) DecreOC(req *vertex.Request) error {
 	ts := req.GetTimestamp()
-	var ps vertex.Pointstamp
+	var ps Pointstamp
 	e := req.GetEdge()
 	if e.GetSrc() == e.GetTarget() {
-		ps = vertex.NewVertexPointStamp(
+		ps = NewVertexPointStamp(
 			e.GetSrc(),
 			&ts,
 		)
 	} else {
-		ps = vertex.NewEdgePointStamp(
+		ps = NewEdgePointStamp(
 			e,
 			&ts,
 		)
 	}
 	s.graph.DecreOC(ps)
-	s.vertexMap[e.GetSrc()].ackChan <- *vertex.NewRequest(
+	s.vertexMap[e.GetTarget()].ackChan <- *vertex.NewRequest(
 		vertex.CallbackType_Ack,
 		nil,
-		vertex.Timestamp{},
+		timestamp.Timestamp{},
 		vertex.Message{},
 	)
 	return nil

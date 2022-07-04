@@ -1,5 +1,9 @@
 package vertex
 
+import (
+	"github.com/stepneko/neko-dataflow/timestamp"
+)
+
 type CallbackType int
 
 const (
@@ -18,4 +22,4 @@ const (
 // For SendBy and OnRecv, all three parameters are needed.
 // For NotifyAt and OnNotify, m Message could be nil since it's not used.
 // For timestamp handling, both e Edge and m Message could be nil.
-type Callback func(e Edge, m Message, ts Timestamp) error
+type Callback func(e Edge, m Message, ts timestamp.Timestamp) error
