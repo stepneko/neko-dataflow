@@ -18,22 +18,23 @@ func NewInputVertex() *InputVertex {
 
 func (i *InputVertex) Send(ts timestamp.Timestamp, m Message) {
 	ch := i.GetInTaskChan()
-	req := NewRequest(
-		CallbackType_OnRecv,
-		NewEdge(i, i),
-		ts,
-		m,
-	)
-	ch <- *req
+	req := Request{
+		Typ:  CallbackType_OnRecv,
+		Edge: NewEdge(i, i),
+		Ts:   ts,
+		Msg:  m,
+	}
+	ch <- req
 }
 
 func (i *InputVertex) Notify(ts timestamp.Timestamp) {
 	ch := i.GetInTaskChan()
-	req := NewRequest(
-		CallbackType_OnNotify,
-		NewEdge(i, i),
-		ts,
-		Message{},
-	)
-	ch <- *req
+	req := Request{
+		Typ:  CallbackType_OnNotify,
+		Edge: NewEdge(i, i),
+		Ts:   ts,
+		Msg:  Message{},
+	}
+
+	ch <- req
 }

@@ -50,22 +50,22 @@ func (s *SimpleScheduler) RegisterVertex(v vertex.Vertex) {
 	// Set up channel into scheduler
 	v.SetExtChan(s.ch)
 	v.On(vertex.CallbackType_SendBy, func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
-		v.GetExtChan() <- *vertex.NewRequest(
-			vertex.CallbackType_SendBy,
-			e,
-			ts,
-			m,
-		)
+		v.GetExtChan() <- vertex.Request{
+			Typ:  vertex.CallbackType_SendBy,
+			Edge: e,
+			Ts:   ts,
+			Msg:  m,
+		}
 		return nil
 	})
 
 	v.On(vertex.CallbackType_NotifyAt, func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
-		v.GetExtChan() <- *vertex.NewRequest(
-			vertex.CallbackType_NotifyAt,
-			vertex.NewEdge(v, v), // Since NotifyAt is calling at a vertex itself, just set the edge to be itself.
-			ts,
-			m,
-		)
+		v.GetExtChan() <- vertex.Request{
+			Typ:  vertex.CallbackType_NotifyAt,
+			Edge: vertex.NewEdge(v, v), // Since NotifyAt is calling at a vertex itself, just set the edge to be itself.
+			Ts:   ts,
+			Msg:  m,
+		}
 		return nil
 	})
 
@@ -139,7 +139,7 @@ func (s *SimpleScheduler) Serve(ctx context.Context) error {
 }
 
 func (s *SimpleScheduler) HandleReq(req *vertex.Request) error {
-	typ := req.GetType()
+	typ := req.Typ
 
 	if typ == vertex.CallbackType_IncreOC {
 		s.IncreOC(req)
@@ -154,9 +154,9 @@ func (s *SimpleScheduler) HandleReq(req *vertex.Request) error {
 }
 
 func (s *SimpleScheduler) IncreOC(req *vertex.Request) error {
-	ts := req.GetTimestamp()
+	ts := req.Ts
 	var ps Pointstamp
-	e := req.GetEdge()
+	e := req.Edge
 	if e.GetSrc() == e.GetTarget() {
 		ps = NewVertexPointStamp(
 			e.GetSrc(),
@@ -169,19 +169,19 @@ func (s *SimpleScheduler) IncreOC(req *vertex.Request) error {
 		)
 	}
 	s.graph.IncreOC(ps)
-	s.vertexMap[e.GetSrc()].ackChan <- *vertex.NewRequest(
-		vertex.CallbackType_Ack,
-		nil,
-		timestamp.Timestamp{},
-		vertex.Message{},
-	)
+	s.vertexMap[e.GetSrc()].ackChan <- vertex.Request{
+		Typ:  vertex.CallbackType_Ack,
+		Edge: nil,
+		Ts:   timestamp.Timestamp{},
+		Msg:  vertex.Message{},
+	}
 	return nil
 }
 
 func (s *SimpleScheduler) DecreOC(req *vertex.Request) error {
-	ts := req.GetTimestamp()
+	ts := req.Ts
 	var ps Pointstamp
-	e := req.GetEdge()
+	e := req.Edge
 	if e.GetSrc() == e.GetTarget() {
 		ps = NewVertexPointStamp(
 			e.GetSrc(),
@@ -194,37 +194,37 @@ func (s *SimpleScheduler) DecreOC(req *vertex.Request) error {
 		)
 	}
 	s.graph.DecreOC(ps)
-	s.vertexMap[e.GetTarget()].ackChan <- *vertex.NewRequest(
-		vertex.CallbackType_Ack,
-		nil,
-		timestamp.Timestamp{},
-		vertex.Message{},
-	)
+	s.vertexMap[e.GetTarget()].ackChan <- vertex.Request{
+		Typ:  vertex.CallbackType_Ack,
+		Edge: nil,
+		Ts:   timestamp.Timestamp{},
+		Msg:  vertex.Message{},
+	}
 	return nil
 }
 
 func (s *SimpleScheduler) SendBy(req *vertex.Request) error {
-	e := req.GetEdge()
+	e := req.Edge
 	target := e.GetTarget()
 	ch := s.vertexMap[target]
-	ch.taskChan <- *vertex.NewRequest(
-		vertex.CallbackType_OnRecv,
-		e,
-		req.GetTimestamp(),
-		req.GetMessage(),
-	)
+	ch.taskChan <- vertex.Request{
+		Typ:  vertex.CallbackType_OnRecv,
+		Edge: e,
+		Ts:   req.Ts,
+		Msg:  req.Msg,
+	}
 	return nil
 }
 
 func (s *SimpleScheduler) NotifyAt(req *vertex.Request) error {
-	e := req.GetEdge()
+	e := req.Edge
 	target := e.GetTarget()
 	ch := s.vertexMap[target]
-	ch.taskChan <- *vertex.NewRequest(
+	ch.taskChan <- vertex.Request{
 		vertex.CallbackType_OnNotify,
 		e,
-		req.GetTimestamp(),
-		req.GetMessage(),
-	)
+		req.Ts,
+		req.Msg,
+	}
 	return nil
 }

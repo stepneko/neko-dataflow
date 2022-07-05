@@ -132,10 +132,10 @@ func (v *GenericVertex) On(typ CallbackType, cb Callback) error {
 
 // Handle runs a function that has been registered by On().
 func (v *GenericVertex) Handle(ctx context.Context, req *Request) error {
-	typ := req.GetType()
-	ts := req.GetTimestamp()
-	e := req.GetEdge()
-	m := req.GetMessage()
+	typ := req.Typ
+	ts := req.Ts
+	e := req.Edge
+	m := req.Msg
 
 	fn, exist := v.callbacks[typ]
 	if !exist {
@@ -191,12 +191,12 @@ func (v *GenericVertex) PreFn(
 	// When doing SendBy, OC[(t, e)] <- OC[(t, e)] + 1.
 	// When doing NotifyAt, OC[(t, v)] <- OC[(t, v)] + 1.
 	if typ == CallbackType_SendBy || typ == CallbackType_NotifyAt {
-		v.extCh <- *NewRequest(
-			CallbackType_IncreOC,
-			e,
-			*ts,
-			Message{},
-		)
+		v.extCh <- Request{
+			Typ:  CallbackType_IncreOC,
+			Edge: e,
+			Ts:   *ts,
+			Msg:  Message{},
+		}
 		select {
 		case <-ctx.Done():
 			return
@@ -227,12 +227,12 @@ func (v *GenericVertex) PostFn(
 	// When doing OnRecv, OC[(t, e)] <- OC[(t, e)] - 1
 	// When doing OnNotify, OC[(t, v)] <- OC[(t, v)] - 1
 	if typ == CallbackType_OnRecv || typ == CallbackType_OnNotify {
-		v.extCh <- *NewRequest(
-			CallbackType_DecreOC,
-			e,
-			*ts,
-			Message{},
-		)
+		v.extCh <- Request{
+			Typ:  CallbackType_DecreOC,
+			Edge: e,
+			Ts:   *ts,
+			Msg:  Message{},
+		}
 		select {
 		case <-ctx.Done():
 			return
