@@ -46,30 +46,30 @@ func main() {
 	}
 
 	// Define behaviors of input vertex.
-	input.On(vertex.CallbackType_OnRecv, func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
+	input.OnRecv(func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
 		println("input on recv: " + m.ToString())
 		input.SendBy(e1, m, ts)
 		return nil
 	})
-	input.On(vertex.CallbackType_OnNotify, func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
+	input.OnNotify(func(ts timestamp.Timestamp) error {
 		println("input on notify")
 		return nil
 	})
 
-	v1.On(vertex.CallbackType_OnRecv, func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
+	v1.OnRecv(func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
 		println("v1 on recv: " + m.ToString())
 		v1.SendBy(e2, m, ts)
 		return nil
 	})
-	v1.On(vertex.CallbackType_OnNotify, func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
+	v1.OnNotify(func(ts timestamp.Timestamp) error {
 		println("v1 on notify")
 		return nil
 	})
-	v2.On(vertex.CallbackType_OnRecv, func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
+	v2.OnRecv(func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
 		println("v2 on recv: " + m.ToString())
 		return nil
 	})
-	v2.On(vertex.CallbackType_OnNotify, func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
+	v2.OnNotify(func(ts timestamp.Timestamp) error {
 		println("v2 on notify")
 		return nil
 	})

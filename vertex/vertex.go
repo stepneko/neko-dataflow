@@ -3,7 +3,6 @@ package vertex
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 
 	"github.com/stepneko/neko-dataflow/timestamp"
@@ -39,8 +38,6 @@ type Vertex interface {
 	SetInAckChan(chan Request)
 	// GetInAckChan gets the chan handle receiving acks from scheduler.
 	GetInAckChan() chan Request
-	// On registers callbacks with types to the vertex.
-	On(typ CallbackType, cb Callback) error
 	// Handle triggers the callbacks with request.
 	Handle(ctx context.Context, req *Request) error
 	// HandleTimestamp handles timestamp since the vertex could be ingress, egress or feedback.
@@ -49,8 +46,65 @@ type Vertex interface {
 	SendBy(e Edge, m Message, ts timestamp.Timestamp) error
 	// NotifyAt is a wrapper that triggers the CallbackType_NotifyAt function
 	NotifyAt(ts timestamp.Timestamp) error
+	// OnRecv registers CallbackType_OnRecv function
+	OnRecv(f func(e Edge, m Message, ts timestamp.Timestamp) error)
+	// OnNotify registers CallbackType_OnNotify function
+	OnNotify(f func(ts timestamp.Timestamp) error)
 	// Start starts a runtime for the vertex to handle dataflow.
 	Start(ctx context.Context, wg sync.WaitGroup) error
+}
+
+type VertexFunctionHook struct {
+	SendBy   func(e Edge, m Message, ts timestamp.Timestamp) error
+	NotifyAt func(v Vertex, ts timestamp.Timestamp) error
+	OnRecv   func(e Edge, m Message, ts timestamp.Timestamp) error
+	OnNotify func(ts timestamp.Timestamp) error
+}
+
+func (h *VertexFunctionHook) SetupExtChan(ch chan Request) {
+	h.SendBy = func(e Edge, m Message, ts timestamp.Timestamp) error {
+		ch <- Request{
+			Typ:  CallbackType_SendBy,
+			Edge: e,
+			Ts:   ts,
+			Msg:  m,
+		}
+		return nil
+	}
+
+	h.NotifyAt = func(v Vertex, ts timestamp.Timestamp) error {
+		ch <- Request{
+			Typ:  CallbackType_NotifyAt,
+			Edge: NewEdge(v, v), // Since NotifyAt is calling at a vertex itself, just set the edge to be itself.
+			Ts:   ts,
+			Msg:  Message{},
+		}
+		return nil
+	}
+}
+
+func (h *VertexFunctionHook) SanityCheck(typ CallbackType) error {
+	if typ == CallbackType_SendBy {
+		if h.SendBy == nil {
+			return errors.New("hook has not set up SendBy function")
+		}
+	} else if typ == CallbackType_NotifyAt {
+		if h.NotifyAt == nil {
+			return errors.New("hook has not set up NotifyAt function")
+		}
+	} else if typ == CallbackType_OnRecv {
+		if h.OnRecv == nil {
+			return errors.New("hook has not set up OnRecv function")
+		}
+	} else if typ == CallbackType_OnNotify {
+		if h.OnNotify == nil {
+			return errors.New("hook has not set up OnNotify function")
+		}
+	} else {
+		return errors.New("invalid callback type")
+	}
+
+	return nil
 }
 
 type GenericVertex struct {
@@ -59,7 +113,7 @@ type GenericVertex struct {
 	extCh      chan Request
 	inTaskCh   chan Request
 	inAckCh    chan Request
-	callbacks  map[CallbackType]Callback
+	hook       VertexFunctionHook
 }
 
 func NewGenericVertex() *GenericVertex {
@@ -69,7 +123,7 @@ func NewGenericVertex() *GenericVertex {
 		extCh:      nil,
 		inTaskCh:   nil,
 		inAckCh:    nil,
-		callbacks:  make(map[CallbackType]Callback),
+		hook:       VertexFunctionHook{},
 	}
 }
 
@@ -99,6 +153,7 @@ func (v *GenericVertex) GetType() VertexType {
 
 func (v *GenericVertex) SetExtChan(ch chan Request) {
 	v.extCh = ch
+	v.hook.SetupExtChan(ch)
 }
 
 func (v *GenericVertex) GetExtChan() chan Request {
@@ -121,26 +176,18 @@ func (v *GenericVertex) GetInAckChan() chan Request {
 	return v.inAckCh
 }
 
-// Register a function to this VertexCore
-func (v *GenericVertex) On(typ CallbackType, cb Callback) error {
-	if _, exist := v.callbacks[typ]; exist {
-		return errors.New(fmt.Sprintf("function type %d already registered", typ))
-	}
-	v.callbacks[typ] = cb
-	return nil
-}
-
 // Handle runs a function that has been registered by On().
 func (v *GenericVertex) Handle(ctx context.Context, req *Request) error {
 	typ := req.Typ
+
+	// Check if the function is already registered.
+	if err := v.hook.SanityCheck(typ); err != nil {
+		return err
+	}
+
 	ts := req.Ts
 	e := req.Edge
 	m := req.Msg
-
-	fn, exist := v.callbacks[typ]
-	if !exist {
-		return errors.New(fmt.Sprintf("function type %d not registered by triggered", typ))
-	}
 
 	// Handle things internally before triggering callback.
 	v.PreFn(ctx, typ, e, &ts)
@@ -153,7 +200,15 @@ func (v *GenericVertex) Handle(ctx context.Context, req *Request) error {
 	}
 
 	// Trigger the callback for next data step.
-	fn(e, m, *newTs)
+	if typ == CallbackType_SendBy {
+		v.hook.SendBy(e, m, ts)
+	} else if typ == CallbackType_NotifyAt {
+		v.hook.NotifyAt(v, ts)
+	} else if typ == CallbackType_OnRecv {
+		v.hook.OnRecv(e, m, ts)
+	} else if typ == CallbackType_OnNotify {
+		v.hook.OnNotify(ts)
+	}
 
 	// Handle things internally after triggering callback.
 	v.PostFn(ctx, typ, e, &ts)
@@ -243,17 +298,17 @@ func (v *GenericVertex) PostFn(
 }
 
 func (v *GenericVertex) SendBy(e Edge, m Message, ts timestamp.Timestamp) error {
-	fn, exist := v.callbacks[CallbackType_SendBy]
-	if !exist {
-		return errors.New("vertex has not set up SendBy function yet")
-	}
-	return fn(e, m, ts)
+	return v.hook.SendBy(e, m, ts)
 }
 
 func (v *GenericVertex) NotifyAt(ts timestamp.Timestamp) error {
-	fn, exist := v.callbacks[CallbackType_NotifyAt]
-	if !exist {
-		return errors.New("vertex has not set up NotifyAt function yet")
-	}
-	return fn(NewEdge(v, v), Message{}, ts)
+	return v.hook.NotifyAt(v, ts)
+}
+
+func (v *GenericVertex) OnRecv(f func(e Edge, m Message, ts timestamp.Timestamp) error) {
+	v.hook.OnRecv = f
+}
+
+func (v *GenericVertex) OnNotify(f func(ts timestamp.Timestamp) error) {
+	v.hook.OnNotify = f
 }

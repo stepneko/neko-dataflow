@@ -48,26 +48,10 @@ func (s *SimpleScheduler) RegisterVertex(v vertex.Vertex) {
 	// Set up id by scheduler
 	v.SetId(s.CreateVertexId())
 	// Set up channel into scheduler
+	// By doing this, the hook of the vertex is also set up
+	// with the channel, so that the SendBy and NotifyAt is
+	// wired up with the scheduler.
 	v.SetExtChan(s.ch)
-	v.On(vertex.CallbackType_SendBy, func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
-		v.GetExtChan() <- vertex.Request{
-			Typ:  vertex.CallbackType_SendBy,
-			Edge: e,
-			Ts:   ts,
-			Msg:  m,
-		}
-		return nil
-	})
-
-	v.On(vertex.CallbackType_NotifyAt, func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
-		v.GetExtChan() <- vertex.Request{
-			Typ:  vertex.CallbackType_NotifyAt,
-			Edge: vertex.NewEdge(v, v), // Since NotifyAt is calling at a vertex itself, just set the edge to be itself.
-			Ts:   ts,
-			Msg:  m,
-		}
-		return nil
-	})
 
 	// Set up vertex status in scheduler and channels in vertex
 	taskChan := make(chan vertex.Request, 1024)
