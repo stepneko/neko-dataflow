@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/stepneko/neko-dataflow/constants"
 	"github.com/stepneko/neko-dataflow/timestamp"
 	"github.com/stepneko/neko-dataflow/vertex"
 )
@@ -125,13 +126,13 @@ func (s *SimpleScheduler) Serve(ctx context.Context) error {
 func (s *SimpleScheduler) HandleReq(req *vertex.Request) error {
 	typ := req.Typ
 
-	if typ == vertex.CallbackType_IncreOC {
+	if typ == constants.RequestType_IncreOC {
 		s.IncreOC(req)
-	} else if typ == vertex.CallbackType_DecreOC {
+	} else if typ == constants.RequestType_DecreOC {
 		s.DecreOC(req)
-	} else if typ == vertex.CallbackType_SendBy {
+	} else if typ == constants.RequestType_SendBy {
 		s.SendBy(req)
-	} else if typ == vertex.CallbackType_NotifyAt {
+	} else if typ == constants.RequestType_NotifyAt {
 		s.NotifyAt(req)
 	}
 	return nil
@@ -154,7 +155,7 @@ func (s *SimpleScheduler) IncreOC(req *vertex.Request) error {
 	}
 	s.graph.IncreOC(ps)
 	s.vertexMap[e.GetSrc()].ackChan <- vertex.Request{
-		Typ:  vertex.CallbackType_Ack,
+		Typ:  constants.RequestType_Ack,
 		Edge: nil,
 		Ts:   timestamp.Timestamp{},
 		Msg:  vertex.Message{},
@@ -179,7 +180,7 @@ func (s *SimpleScheduler) DecreOC(req *vertex.Request) error {
 	}
 	s.graph.DecreOC(ps)
 	s.vertexMap[e.GetTarget()].ackChan <- vertex.Request{
-		Typ:  vertex.CallbackType_Ack,
+		Typ:  constants.RequestType_Ack,
 		Edge: nil,
 		Ts:   timestamp.Timestamp{},
 		Msg:  vertex.Message{},
@@ -192,7 +193,7 @@ func (s *SimpleScheduler) SendBy(req *vertex.Request) error {
 	target := e.GetTarget()
 	ch := s.vertexMap[target]
 	ch.taskChan <- vertex.Request{
-		Typ:  vertex.CallbackType_OnRecv,
+		Typ:  constants.RequestType_OnRecv,
 		Edge: e,
 		Ts:   req.Ts,
 		Msg:  req.Msg,
@@ -205,7 +206,7 @@ func (s *SimpleScheduler) NotifyAt(req *vertex.Request) error {
 	target := e.GetTarget()
 	ch := s.vertexMap[target]
 	ch.taskChan <- vertex.Request{
-		vertex.CallbackType_OnNotify,
+		constants.RequestType_OnNotify,
 		e,
 		req.Ts,
 		req.Msg,

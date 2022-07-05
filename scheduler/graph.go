@@ -3,6 +3,7 @@ package scheduler
 import (
 	"errors"
 
+	"github.com/stepneko/neko-dataflow/constants"
 	"github.com/stepneko/neko-dataflow/timestamp"
 	"github.com/stepneko/neko-dataflow/vertex"
 )
@@ -125,7 +126,7 @@ func (g *Graph) CouldResultIn(a Pointstamp, b Pointstamp) bool {
 	// The srcTs is the timestamp getting out of the a edge.
 	// Therefore it has to be processed by target vertex of that edge.
 	srcTs := timestamp.CopyTimestampFrom(a.GetTimestamp())
-	srcVertex.HandleTimestamp(srcTs)
+	timestamp.HandleTimestamp(srcVertex.GetType(), srcTs)
 	targetVertex := b.GetSrc()
 	targetTs := b.GetTimestamp()
 	queue := []*VertexPointStamp{NewVertexPointStamp(srcVertex, srcTs)}
@@ -157,7 +158,7 @@ func (g *Graph) CouldResultIn(a Pointstamp, b Pointstamp) bool {
 			childVertex := childNode.vertex
 			// Handle timestamp according to the child vertex
 			newTs := timestamp.CopyTimestampFrom(currTs)
-			childVertex.HandleTimestamp(newTs)
+			timestamp.HandleTimestamp(childVertex.GetType(), newTs)
 			newPs := NewVertexPointStamp(childVertex, newTs)
 			queue = append(queue, newPs)
 		}
@@ -181,7 +182,7 @@ func (g *Graph) PreProcess() {
 	// allowing all events downstream of the input to eventually
 	// drain from the computation.
 	for v := range g.vertexMap {
-		if v.GetType() == vertex.VertexType_Input {
+		if v.GetType() == constants.VertexType_Input {
 			ts := timestamp.NewTimestamp()
 			ps := NewVertexPointStamp(v, ts)
 			g.activePsMap[ps.Hash()] = &PointstampCounter{

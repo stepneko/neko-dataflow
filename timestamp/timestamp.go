@@ -1,8 +1,10 @@
 package timestamp
 
 import (
+	"errors"
 	"fmt"
 
+	"github.com/stepneko/neko-dataflow/constants"
 	"github.com/stepneko/neko-dataflow/utils"
 )
 
@@ -59,4 +61,23 @@ func LE(a *Timestamp, b *Timestamp) bool {
 
 func (ts *Timestamp) ToString() string {
 	return fmt.Sprintf("Epoch: %d, Counters: %v", ts.Epoch, ts.Counters)
+}
+
+func HandleTimestamp(typ constants.VertexType, ts *Timestamp) error {
+	if typ == constants.VertexType_Ingress {
+		ts.Counters = append(ts.Counters, 0)
+	} else if typ == constants.VertexType_Egress {
+		l := len(ts.Counters)
+		if l == 0 {
+			return errors.New("timestamp handling error in egress vertex. Counter already empty so cannot pop")
+		}
+		ts.Counters = ts.Counters[:l-1]
+	} else if typ == constants.VertexType_Feedback {
+		l := len(ts.Counters)
+		if l == 0 {
+			return errors.New("timestamp handling error in feedback vertex. Counter already empty")
+		}
+		ts.Counters[l-1] += 1
+	}
+	return nil
 }
