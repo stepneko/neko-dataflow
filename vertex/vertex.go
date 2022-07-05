@@ -5,17 +5,8 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/stepneko/neko-dataflow/constants"
 	"github.com/stepneko/neko-dataflow/timestamp"
-)
-
-type VertexType int
-
-const (
-	VertexType_Generic  VertexType = 1
-	VertexType_Ingress  VertexType = 2
-	VertexType_Egress   VertexType = 3
-	VertexType_Feedback VertexType = 4
-	VertexType_Input    VertexType = 5
 )
 
 // Vertex is the interface that represents a vertex in the computing graph.
@@ -25,7 +16,7 @@ type Vertex interface {
 	// Get Id of the vertex.
 	GetId() int
 	// Get Type of the vertex.
-	GetType() VertexType
+	GetType() constants.VertexType
 	// SetExtChan sets the chan handle sending requests to scheduler.
 	SetExtChan(chan Request)
 	// GetExtChan gets the chan handle sending requests to scheduler.
@@ -38,17 +29,15 @@ type Vertex interface {
 	SetInAckChan(chan Request)
 	// GetInAckChan gets the chan handle receiving acks from scheduler.
 	GetInAckChan() chan Request
-	// Handle triggers the callbacks with request.
+	// Handle triggers the processing of request.
 	Handle(ctx context.Context, req *Request) error
-	// HandleTimestamp handles timestamp since the vertex could be ingress, egress or feedback.
-	HandleTimestamp(ts *timestamp.Timestamp) error
-	// SendBy is a wrapper that triggers the CallbackType_SendBy function
+	// SendBy is a wrapper that triggers the RequestType_SendBy function
 	SendBy(e Edge, m Message, ts timestamp.Timestamp) error
-	// NotifyAt is a wrapper that triggers the CallbackType_NotifyAt function
+	// NotifyAt is a wrapper that triggers the RequestType_NotifyAt function
 	NotifyAt(ts timestamp.Timestamp) error
-	// OnRecv registers CallbackType_OnRecv function
+	// OnRecv registers RequestType_OnRecv function
 	OnRecv(f func(e Edge, m Message, ts timestamp.Timestamp) error)
-	// OnNotify registers CallbackType_OnNotify function
+	// OnNotify registers RequestType_OnNotify function
 	OnNotify(f func(ts timestamp.Timestamp) error)
 	// Start starts a runtime for the vertex to handle dataflow.
 	Start(ctx context.Context, wg sync.WaitGroup) error
@@ -64,7 +53,7 @@ type VertexFunctionHook struct {
 func (h *VertexFunctionHook) SetupExtChan(ch chan Request) {
 	h.SendBy = func(e Edge, m Message, ts timestamp.Timestamp) error {
 		ch <- Request{
-			Typ:  CallbackType_SendBy,
+			Typ:  constants.RequestType_SendBy,
 			Edge: e,
 			Ts:   ts,
 			Msg:  m,
@@ -74,7 +63,7 @@ func (h *VertexFunctionHook) SetupExtChan(ch chan Request) {
 
 	h.NotifyAt = func(v Vertex, ts timestamp.Timestamp) error {
 		ch <- Request{
-			Typ:  CallbackType_NotifyAt,
+			Typ:  constants.RequestType_NotifyAt,
 			Edge: NewEdge(v, v), // Since NotifyAt is calling at a vertex itself, just set the edge to be itself.
 			Ts:   ts,
 			Msg:  Message{},
@@ -83,47 +72,47 @@ func (h *VertexFunctionHook) SetupExtChan(ch chan Request) {
 	}
 }
 
-func (h *VertexFunctionHook) SanityCheck(typ CallbackType) error {
-	if typ == CallbackType_SendBy {
+func (h *VertexFunctionHook) SanityCheck(typ constants.RequestType) error {
+	if typ == constants.RequestType_SendBy {
 		if h.SendBy == nil {
 			return errors.New("hook has not set up SendBy function")
 		}
-	} else if typ == CallbackType_NotifyAt {
+	} else if typ == constants.RequestType_NotifyAt {
 		if h.NotifyAt == nil {
 			return errors.New("hook has not set up NotifyAt function")
 		}
-	} else if typ == CallbackType_OnRecv {
+	} else if typ == constants.RequestType_OnRecv {
 		if h.OnRecv == nil {
 			return errors.New("hook has not set up OnRecv function")
 		}
-	} else if typ == CallbackType_OnNotify {
+	} else if typ == constants.RequestType_OnNotify {
 		if h.OnNotify == nil {
 			return errors.New("hook has not set up OnNotify function")
 		}
 	} else {
-		return errors.New("invalid callback type")
+		return errors.New("invalid request type")
 	}
 
 	return nil
 }
 
 type GenericVertex struct {
-	id         int
-	vertexType VertexType
-	extCh      chan Request
-	inTaskCh   chan Request
-	inAckCh    chan Request
-	hook       VertexFunctionHook
+	id       int
+	typ      constants.VertexType
+	extCh    chan Request
+	inTaskCh chan Request
+	inAckCh  chan Request
+	hook     VertexFunctionHook
 }
 
 func NewGenericVertex() *GenericVertex {
 	return &GenericVertex{
-		id:         0,
-		vertexType: VertexType_Generic,
-		extCh:      nil,
-		inTaskCh:   nil,
-		inAckCh:    nil,
-		hook:       VertexFunctionHook{},
+		id:       0,
+		typ:      constants.VertexType_Generic,
+		extCh:    nil,
+		inTaskCh: nil,
+		inAckCh:  nil,
+		hook:     VertexFunctionHook{},
 	}
 }
 
@@ -147,8 +136,8 @@ func (v *GenericVertex) GetId() int {
 	return v.id
 }
 
-func (v *GenericVertex) GetType() VertexType {
-	return v.vertexType
+func (v *GenericVertex) GetType() constants.VertexType {
+	return v.typ
 }
 
 func (v *GenericVertex) SetExtChan(ch chan Request) {
@@ -189,65 +178,47 @@ func (v *GenericVertex) Handle(ctx context.Context, req *Request) error {
 	e := req.Edge
 	m := req.Msg
 
-	// Handle things internally before triggering callback.
+	// Handle things internally before triggering request.
 	v.PreFn(ctx, typ, e, &ts)
 
 	// Handle timestamp here when doing OnRecv or OnNotify.
 	// This is for Ingress, Egress and Feedback vertices.
 	newTs := timestamp.CopyTimestampFrom(&ts)
-	if typ == CallbackType_OnRecv || typ == CallbackType_OnNotify {
-		v.HandleTimestamp(newTs)
+	if typ == constants.RequestType_OnRecv ||
+		typ == constants.RequestType_OnNotify {
+		timestamp.HandleTimestamp(v.typ, newTs)
 	}
 
-	// Trigger the callback for next data step.
-	if typ == CallbackType_SendBy {
+	// Trigger the request for next data step.
+	if typ == constants.RequestType_SendBy {
 		v.hook.SendBy(e, m, ts)
-	} else if typ == CallbackType_NotifyAt {
+	} else if typ == constants.RequestType_NotifyAt {
 		v.hook.NotifyAt(v, ts)
-	} else if typ == CallbackType_OnRecv {
+	} else if typ == constants.RequestType_OnRecv {
 		v.hook.OnRecv(e, m, ts)
-	} else if typ == CallbackType_OnNotify {
+	} else if typ == constants.RequestType_OnNotify {
 		v.hook.OnNotify(ts)
 	}
 
-	// Handle things internally after triggering callback.
+	// Handle things internally after triggering request.
 	v.PostFn(ctx, typ, e, &ts)
 
 	return nil
 }
 
-func (v GenericVertex) HandleTimestamp(ts *timestamp.Timestamp) error {
-	typ := v.vertexType
-	if typ == VertexType_Ingress {
-		ts.Counters = append(ts.Counters, 0)
-	} else if typ == VertexType_Egress {
-		l := len(ts.Counters)
-		if l == 0 {
-			return errors.New("timestamp handling error in egress vertex. Counter already empty so cannot pop")
-		}
-		ts.Counters = ts.Counters[:l-1]
-	} else if typ == VertexType_Feedback {
-		l := len(ts.Counters)
-		if l == 0 {
-			return errors.New("timestamp handling error in feedback vertex. Counter already empty")
-		}
-		ts.Counters[l-1] += 1
-	}
-	return nil
-}
-
 func (v *GenericVertex) PreFn(
 	ctx context.Context,
-	typ CallbackType,
+	typ constants.RequestType,
 	e Edge,
 	ts *timestamp.Timestamp,
 ) {
 	// According to the paper, in PreFn, there are two things to do with OC:
 	// When doing SendBy, OC[(t, e)] <- OC[(t, e)] + 1.
 	// When doing NotifyAt, OC[(t, v)] <- OC[(t, v)] + 1.
-	if typ == CallbackType_SendBy || typ == CallbackType_NotifyAt {
+	if typ == constants.RequestType_SendBy ||
+		typ == constants.RequestType_NotifyAt {
 		v.extCh <- Request{
-			Typ:  CallbackType_IncreOC,
+			Typ:  constants.RequestType_IncreOC,
 			Edge: e,
 			Ts:   *ts,
 			Msg:  Message{},
@@ -264,7 +235,7 @@ func (v *GenericVertex) PreFn(
 
 func (v *GenericVertex) PostFn(
 	ctx context.Context,
-	typ CallbackType,
+	typ constants.RequestType,
 	e Edge,
 	ts *timestamp.Timestamp,
 ) {
@@ -272,7 +243,8 @@ func (v *GenericVertex) PostFn(
 	// If the vertex is an input vertex, then the OnRecv is triggered
 	// an external data source.
 	// In this case we don't change OC in the graph.
-	if typ == CallbackType_OnRecv && v.GetType() == VertexType_Input {
+	if typ == constants.RequestType_OnRecv &&
+		v.GetType() == constants.VertexType_Input {
 		return
 	}
 
@@ -281,9 +253,10 @@ func (v *GenericVertex) PostFn(
 	// According to the paper, in PostFn, there are two things to do with OC:
 	// When doing OnRecv, OC[(t, e)] <- OC[(t, e)] - 1
 	// When doing OnNotify, OC[(t, v)] <- OC[(t, v)] - 1
-	if typ == CallbackType_OnRecv || typ == CallbackType_OnNotify {
+	if typ == constants.RequestType_OnRecv ||
+		typ == constants.RequestType_OnNotify {
 		v.extCh <- Request{
-			Typ:  CallbackType_DecreOC,
+			Typ:  constants.RequestType_DecreOC,
 			Edge: e,
 			Ts:   *ts,
 			Msg:  Message{},

@@ -1,6 +1,7 @@
 package vertex
 
 import (
+	"github.com/stepneko/neko-dataflow/constants"
 	"github.com/stepneko/neko-dataflow/timestamp"
 )
 
@@ -12,14 +13,14 @@ func NewInputVertex() *InputVertex {
 	vertex := InputVertex{
 		*NewGenericVertex(),
 	}
-	vertex.vertexType = VertexType_Input
+	vertex.typ = constants.VertexType_Input
 	return &vertex
 }
 
 func (i *InputVertex) Send(ts timestamp.Timestamp, m Message) {
 	ch := i.GetInTaskChan()
 	req := Request{
-		Typ:  CallbackType_OnRecv,
+		Typ:  constants.RequestType_OnRecv,
 		Edge: NewEdge(i, i),
 		Ts:   ts,
 		Msg:  m,
@@ -30,7 +31,7 @@ func (i *InputVertex) Send(ts timestamp.Timestamp, m Message) {
 func (i *InputVertex) Notify(ts timestamp.Timestamp) {
 	ch := i.GetInTaskChan()
 	req := Request{
-		Typ:  CallbackType_OnNotify,
+		Typ:  constants.RequestType_OnNotify,
 		Edge: NewEdge(i, i),
 		Ts:   ts,
 		Msg:  Message{},
