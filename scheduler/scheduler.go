@@ -206,10 +206,10 @@ func (s *SimpleScheduler) NotifyAt(req *vertex.Request) error {
 	target := e.GetTarget()
 	ch := s.vertexMap[target]
 	ch.taskChan <- vertex.Request{
-		constants.RequestType_OnNotify,
-		e,
-		req.Ts,
-		req.Msg,
+		Typ:  constants.RequestType_OnNotify,
+		Edge: e,
+		Ts:   req.Ts,
+		Msg:  req.Msg,
 	}
 	return nil
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/stepneko/neko-dataflow/scheduler"
 	"github.com/stepneko/neko-dataflow/timestamp"
 	"github.com/stepneko/neko-dataflow/vertex"
+	"go.uber.org/zap"
 )
 
 // Build a simple scheduler with a simple input vertex.
@@ -30,7 +31,7 @@ func main() {
 	// Create an edge between them.
 	e1, err := s.BuildEdge(input, v1)
 	if err != nil {
-		println(err.Error())
+		zap.L().Error(err.Error())
 		return
 	}
 
@@ -41,7 +42,7 @@ func main() {
 
 	e2, err := s.BuildEdge(v1, v2)
 	if err != nil {
-		println(err.Error())
+		zap.L().Error(err.Error())
 		return
 	}
 
@@ -76,6 +77,8 @@ func main() {
 
 	// Start the scheduler
 	go s.Run()
+
+	println("starting here")
 
 	// Start streaming data into the system
 	ts := timestamp.NewTimestamp()
