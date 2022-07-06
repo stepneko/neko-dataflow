@@ -12,13 +12,13 @@ import (
 // Build a sample graph to test on, and return
 // the array of vertices in positioned array.
 //
-// [v0]Generic -> [v1]Ingress --> [v2]Generic -> [v3]Generic -> [v5]Egress -> [v6]Generic
+// [v0]Input -> [v1]Ingress --> [v2]Generic -> [v3]Generic -> [v5]Egress -> [v6]Generic
 //                                   ^                   |
 //                                   |                   |
 //                                   +-- [v4]Feedback  <-+
 //
 func BuildGraph(t *testing.T, g *Graph, vsp *[]vertex.Vertex) {
-	*vsp = append(*vsp, vertex.NewGenericVertex())
+	*vsp = append(*vsp, vertex.NewInputVertex())
 	*vsp = append(*vsp, vertex.NewIngressVertex())
 	*vsp = append(*vsp, vertex.NewGenericVertex())
 	*vsp = append(*vsp, vertex.NewGenericVertex())
