@@ -12,9 +12,9 @@ import (
 // Vertex is the interface that represents a vertex in the computing graph.
 type Vertex interface {
 	// Set Id of the vertex.
-	SetId(int)
+	SetId(constants.VertexId)
 	// Get Id of the vertex.
-	GetId() int
+	GetId() constants.VertexId
 	// Get Type of the vertex.
 	GetType() constants.VertexType
 	// SetExtChan sets the chan handle sending requests to scheduler.
@@ -62,9 +62,10 @@ func (h *VertexFunctionHook) SetupExtChan(ch chan Request) {
 	}
 
 	h.NotifyAt = func(v Vertex, ts timestamp.Timestamp) error {
+		id := v.GetId()
 		ch <- Request{
 			Typ:  constants.RequestType_NotifyAt,
-			Edge: NewEdge(v, v), // Since NotifyAt is calling at a vertex itself, just set the edge to be itself.
+			Edge: NewEdge(id, id), // Since NotifyAt is calling at a vertex itself, just set the edge to be itself.
 			Ts:   ts,
 			Msg:  Message{},
 		}
@@ -96,8 +97,8 @@ func (h *VertexFunctionHook) SanityCheck(typ constants.RequestType) error {
 	return nil
 }
 
-type GenericVertex struct {
-	id       int
+type VertexCore struct {
+	id       constants.VertexId
 	typ      constants.VertexType
 	extCh    chan Request
 	inTaskCh chan Request
@@ -105,8 +106,8 @@ type GenericVertex struct {
 	hook     VertexFunctionHook
 }
 
-func NewGenericVertex() *GenericVertex {
-	return &GenericVertex{
+func NewVertexCore() *VertexCore {
+	return &VertexCore{
 		id:       0,
 		typ:      constants.VertexType_Generic,
 		extCh:    nil,
@@ -116,7 +117,7 @@ func NewGenericVertex() *GenericVertex {
 	}
 }
 
-func (v *GenericVertex) Start(ctx context.Context, wg sync.WaitGroup) error {
+func (v *VertexCore) Start(ctx context.Context, wg sync.WaitGroup) error {
 	defer wg.Done()
 	for {
 		select {
@@ -128,45 +129,45 @@ func (v *GenericVertex) Start(ctx context.Context, wg sync.WaitGroup) error {
 	}
 }
 
-func (v *GenericVertex) SetId(id int) {
+func (v *VertexCore) SetId(id constants.VertexId) {
 	v.id = id
 }
 
-func (v *GenericVertex) GetId() int {
+func (v *VertexCore) GetId() constants.VertexId {
 	return v.id
 }
 
-func (v *GenericVertex) GetType() constants.VertexType {
+func (v *VertexCore) GetType() constants.VertexType {
 	return v.typ
 }
 
-func (v *GenericVertex) SetExtChan(ch chan Request) {
+func (v *VertexCore) SetExtChan(ch chan Request) {
 	v.extCh = ch
 	v.hook.SetupExtChan(ch)
 }
 
-func (v *GenericVertex) GetExtChan() chan Request {
+func (v *VertexCore) GetExtChan() chan Request {
 	return v.extCh
 }
 
-func (v *GenericVertex) SetInTaskChan(ch chan Request) {
+func (v *VertexCore) SetInTaskChan(ch chan Request) {
 	v.inTaskCh = ch
 }
 
-func (v *GenericVertex) GetInTaskChan() chan Request {
+func (v *VertexCore) GetInTaskChan() chan Request {
 	return v.inTaskCh
 }
 
-func (v *GenericVertex) SetInAckChan(ch chan Request) {
+func (v *VertexCore) SetInAckChan(ch chan Request) {
 	v.inAckCh = ch
 }
 
-func (v *GenericVertex) GetInAckChan() chan Request {
+func (v *VertexCore) GetInAckChan() chan Request {
 	return v.inAckCh
 }
 
 // Handle runs a function that has been registered by On().
-func (v *GenericVertex) Handle(ctx context.Context, req *Request) error {
+func (v *VertexCore) Handle(ctx context.Context, req *Request) error {
 	typ := req.Typ
 
 	// Check if the function is already registered.
@@ -206,7 +207,7 @@ func (v *GenericVertex) Handle(ctx context.Context, req *Request) error {
 	return nil
 }
 
-func (v *GenericVertex) PreFn(
+func (v *VertexCore) PreFn(
 	ctx context.Context,
 	typ constants.RequestType,
 	e Edge,
@@ -233,7 +234,7 @@ func (v *GenericVertex) PreFn(
 	}
 }
 
-func (v *GenericVertex) PostFn(
+func (v *VertexCore) PostFn(
 	ctx context.Context,
 	typ constants.RequestType,
 	e Edge,
@@ -270,18 +271,18 @@ func (v *GenericVertex) PostFn(
 	}
 }
 
-func (v *GenericVertex) SendBy(e Edge, m Message, ts timestamp.Timestamp) error {
+func (v *VertexCore) SendBy(e Edge, m Message, ts timestamp.Timestamp) error {
 	return v.hook.SendBy(e, m, ts)
 }
 
-func (v *GenericVertex) NotifyAt(ts timestamp.Timestamp) error {
+func (v *VertexCore) NotifyAt(ts timestamp.Timestamp) error {
 	return v.hook.NotifyAt(v, ts)
 }
 
-func (v *GenericVertex) OnRecv(f func(e Edge, m Message, ts timestamp.Timestamp) error) {
+func (v *VertexCore) OnRecv(f func(e Edge, m Message, ts timestamp.Timestamp) error) {
 	v.hook.OnRecv = f
 }
 
-func (v *GenericVertex) OnNotify(f func(ts timestamp.Timestamp) error) {
+func (v *VertexCore) OnNotify(f func(ts timestamp.Timestamp) error) {
 	v.hook.OnNotify = f
 }

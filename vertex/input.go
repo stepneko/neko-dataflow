@@ -6,12 +6,12 @@ import (
 )
 
 type InputVertex struct {
-	GenericVertex
+	VertexCore
 }
 
 func NewInputVertex() *InputVertex {
 	vertex := InputVertex{
-		*NewGenericVertex(),
+		*NewVertexCore(),
 	}
 	vertex.typ = constants.VertexType_Input
 	return &vertex
@@ -19,9 +19,10 @@ func NewInputVertex() *InputVertex {
 
 func (i *InputVertex) Send(ts timestamp.Timestamp, m Message) {
 	ch := i.GetInTaskChan()
+	id := i.GetId()
 	req := Request{
 		Typ:  constants.RequestType_OnRecv,
-		Edge: NewEdge(i, i),
+		Edge: NewEdge(id, id),
 		Ts:   ts,
 		Msg:  m,
 	}
@@ -30,9 +31,10 @@ func (i *InputVertex) Send(ts timestamp.Timestamp, m Message) {
 
 func (i *InputVertex) Notify(ts timestamp.Timestamp) {
 	ch := i.GetInTaskChan()
+	id := i.GetId()
 	req := Request{
 		Typ:  constants.RequestType_OnNotify,
-		Edge: NewEdge(i, i),
+		Edge: NewEdge(id, id),
 		Ts:   ts,
 		Msg:  Message{},
 	}

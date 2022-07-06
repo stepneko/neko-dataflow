@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"github.com/stepneko/neko-dataflow/constants"
 	"github.com/stepneko/neko-dataflow/timestamp"
 	"github.com/stepneko/neko-dataflow/utils"
 	"github.com/stepneko/neko-dataflow/vertex"
@@ -12,8 +13,8 @@ import (
 // We use Pointstamp as the interface, for which one must could get
 // src, target and timestamp for graph traversal.
 type Pointstamp interface {
-	GetSrc() vertex.Vertex
-	GetTarget() vertex.Vertex
+	GetSrc() constants.VertexId
+	GetTarget() constants.VertexId
 	GetTimestamp() *timestamp.Timestamp
 	Hash() string
 }
@@ -26,26 +27,26 @@ type PointstampCounter struct {
 
 // VertexPointStamp is a vertex based pointstamp
 type VertexPointStamp struct {
-	vertex vertex.Vertex
-	ts     *timestamp.Timestamp
+	vertexId constants.VertexId
+	ts       *timestamp.Timestamp
 }
 
 func NewVertexPointStamp(
-	v vertex.Vertex,
+	vertexId constants.VertexId,
 	ts *timestamp.Timestamp,
 ) *VertexPointStamp {
 	return &VertexPointStamp{
-		vertex: v,
-		ts:     ts,
+		vertexId: vertexId,
+		ts:       ts,
 	}
 }
 
-func (vps *VertexPointStamp) GetSrc() vertex.Vertex {
-	return vps.vertex
+func (vps *VertexPointStamp) GetSrc() constants.VertexId {
+	return vps.vertexId
 }
 
-func (vps *VertexPointStamp) GetTarget() vertex.Vertex {
-	return vps.vertex
+func (vps *VertexPointStamp) GetTarget() constants.VertexId {
+	return vps.vertexId
 }
 
 func (vps *VertexPointStamp) GetTimestamp() *timestamp.Timestamp {
@@ -53,7 +54,7 @@ func (vps *VertexPointStamp) GetTimestamp() *timestamp.Timestamp {
 }
 
 func (vps *VertexPointStamp) Hash() string {
-	vertexHash := utils.Hash(vps.vertex.GetId())
+	vertexHash := utils.Hash(vps.vertexId)
 	tsHash := utils.Hash(vps.ts)
 	return utils.Hash(vertexHash + tsHash)
 }
@@ -74,11 +75,11 @@ func NewEdgePointStamp(
 	}
 }
 
-func (eps *EdgePointStamp) GetSrc() vertex.Vertex {
+func (eps *EdgePointStamp) GetSrc() constants.VertexId {
 	return eps.edge.GetSrc()
 }
 
-func (eps *EdgePointStamp) GetTarget() vertex.Vertex {
+func (eps *EdgePointStamp) GetTarget() constants.VertexId {
 	return eps.edge.GetTarget()
 }
 

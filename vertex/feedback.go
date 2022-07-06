@@ -5,12 +5,12 @@ import (
 )
 
 type FeedbackVertex struct {
-	GenericVertex
+	VertexCore
 }
 
 func NewFeedbackVertex() *FeedbackVertex {
 	vertex := FeedbackVertex{
-		*NewGenericVertex(),
+		*NewVertexCore(),
 	}
 	vertex.typ = constants.VertexType_Feedback
 	return &vertex

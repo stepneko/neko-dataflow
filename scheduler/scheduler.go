@@ -3,15 +3,17 @@ package scheduler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/stepneko/neko-dataflow/constants"
 	"github.com/stepneko/neko-dataflow/timestamp"
 	"github.com/stepneko/neko-dataflow/vertex"
+	"go.uber.org/zap"
 )
 
 type Scheduler interface {
-	CreateVertexId() int
+	CreateVertexId() constants.VertexId
 	RegisterVertex(v vertex.Vertex) error
 	BuildEdge() error
 	Step() error
@@ -19,35 +21,30 @@ type Scheduler interface {
 }
 
 type SimpleScheduler struct {
-	nextId    int
-	ch        chan vertex.Request
-	vertexMap map[vertex.Vertex]*VertexStatus
-	frontier  []vertex.Vertex
-	graph     *Graph
+	nextId constants.VertexId
+	ch     chan vertex.Request
+	graph  *Graph
 }
 
 // NewScheduler returns a simple scheduler of neko-dataflow
 func NewScheduler() *SimpleScheduler {
 	return &SimpleScheduler{
-		nextId:    0,
-		ch:        make(chan vertex.Request, 1024),
-		vertexMap: make(map[vertex.Vertex]*VertexStatus),
-		frontier:  []vertex.Vertex{},
-		graph:     NewGraph(),
+		nextId: 0,
+		ch:     make(chan vertex.Request, 1024),
+		graph:  NewGraph(),
 	}
 }
 
-func (s *SimpleScheduler) CreateVertexId() int {
+func (s *SimpleScheduler) CreateVertexId() constants.VertexId {
 	id := s.nextId
 	s.nextId += 1
 	return id
 }
 
 func (s *SimpleScheduler) RegisterVertex(v vertex.Vertex) {
-	// Insert the vertex into scheduler
-	s.graph.InsertVertex(v)
 	// Set up id by scheduler
 	v.SetId(s.CreateVertexId())
+
 	// Set up channel into scheduler
 	// By doing this, the hook of the vertex is also set up
 	// with the channel, so that the SendBy and NotifyAt is
@@ -62,10 +59,8 @@ func (s *SimpleScheduler) RegisterVertex(v vertex.Vertex) {
 	ackChan := make(chan vertex.Request, 1024)
 	v.SetInAckChan(ackChan)
 
-	s.vertexMap[v] = NewVertexStatus(
-		taskChan,
-		ackChan,
-	)
+	// Insert the vertex into scheduler
+	s.graph.InsertVertex(v)
 }
 
 func (s *SimpleScheduler) BuildEdge(
@@ -79,7 +74,7 @@ func (s *SimpleScheduler) BuildEdge(
 		return nil, errors.New("target vertex connot be nil")
 	}
 
-	e := vertex.NewEdge(src, target)
+	e := vertex.NewEdge(src.GetId(), target.GetId())
 	s.graph.InsertEdge(e)
 
 	return e, nil
@@ -99,8 +94,9 @@ func (s *SimpleScheduler) Run() error {
 	s.graph.PreProcess()
 
 	var wg sync.WaitGroup
-	for v := range s.vertexMap {
+	for id := range s.graph.VertexMap {
 		wg.Add(1)
+		v := s.graph.VertexMap[id].vertex
 		go v.Start(ctx, wg)
 	}
 
@@ -110,14 +106,14 @@ func (s *SimpleScheduler) Run() error {
 	return nil
 }
 
-func (s *SimpleScheduler) Serve(ctx context.Context) error {
+func (s *SimpleScheduler) Serve(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			return nil
+			return
 		case req := <-s.ch:
 			if err := s.HandleReq(&req); err != nil {
-				return nil
+				zap.L().Error(err.Error())
 			}
 		}
 	}
@@ -153,8 +149,12 @@ func (s *SimpleScheduler) IncreOC(req *vertex.Request) error {
 			&ts,
 		)
 	}
+	node, exist := s.graph.VertexMap[e.GetSrc()]
+	if !exist {
+		return errors.New(fmt.Sprintf("vertex not found when doing IncreOC with id: %d", e.GetSrc()))
+	}
 	s.graph.IncreOC(ps)
-	s.vertexMap[e.GetSrc()].ackChan <- vertex.Request{
+	node.vertex.GetInAckChan() <- vertex.Request{
 		Typ:  constants.RequestType_Ack,
 		Edge: nil,
 		Ts:   timestamp.Timestamp{},
@@ -178,8 +178,12 @@ func (s *SimpleScheduler) DecreOC(req *vertex.Request) error {
 			&ts,
 		)
 	}
+	node, exist := s.graph.VertexMap[e.GetTarget()]
+	if !exist {
+		return errors.New(fmt.Sprintf("vertex not found when doing DecreOC with id: %d", e.GetTarget()))
+	}
 	s.graph.DecreOC(ps)
-	s.vertexMap[e.GetTarget()].ackChan <- vertex.Request{
+	node.vertex.GetInAckChan() <- vertex.Request{
 		Typ:  constants.RequestType_Ack,
 		Edge: nil,
 		Ts:   timestamp.Timestamp{},
@@ -191,8 +195,12 @@ func (s *SimpleScheduler) DecreOC(req *vertex.Request) error {
 func (s *SimpleScheduler) SendBy(req *vertex.Request) error {
 	e := req.Edge
 	target := e.GetTarget()
-	ch := s.vertexMap[target]
-	ch.taskChan <- vertex.Request{
+	node, exist := s.graph.VertexMap[target]
+	if !exist {
+		return errors.New(fmt.Sprintf("vertex not found when doing SendBy with id: %d", target))
+	}
+	ch := node.vertex.GetInTaskChan()
+	ch <- vertex.Request{
 		Typ:  constants.RequestType_OnRecv,
 		Edge: e,
 		Ts:   req.Ts,
@@ -204,8 +212,11 @@ func (s *SimpleScheduler) SendBy(req *vertex.Request) error {
 func (s *SimpleScheduler) NotifyAt(req *vertex.Request) error {
 	e := req.Edge
 	target := e.GetTarget()
-	ch := s.vertexMap[target]
-	ch.taskChan <- vertex.Request{
+	node, exist := s.graph.VertexMap[target]
+	if !exist {
+		return errors.New(fmt.Sprintf("vertex not found with doing NotifyAt with id: %d", target))
+	}
+	node.vertex.GetInTaskChan() <- vertex.Request{
 		Typ:  constants.RequestType_OnNotify,
 		Edge: e,
 		Ts:   req.Ts,
