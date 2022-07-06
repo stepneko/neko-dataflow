@@ -11,26 +11,28 @@ import (
 
 // Vertex is the interface that represents a vertex in the computing graph.
 type Vertex interface {
+	// Set context of the vertex.
+	SetContext(ctx context.Context)
 	// Set Id of the vertex.
-	SetId(constants.VertexId)
+	SetId(id constants.VertexId)
 	// Get Id of the vertex.
 	GetId() constants.VertexId
 	// Get Type of the vertex.
 	GetType() constants.VertexType
 	// SetExtChan sets the chan handle sending requests to scheduler.
-	SetExtChan(chan Request)
+	SetExtChan(ch chan Request)
 	// GetExtChan gets the chan handle sending requests to scheduler.
 	GetExtChan() chan Request
 	// SetInTaskChan sets the chan handle receiving task requests from scheduler.
-	SetInTaskChan(chan Request)
+	SetInTaskChan(ch chan Request)
 	// GetInTaskChan gets the chan handle receiving task requests from scheduler.
 	GetInTaskChan() chan Request
 	// SetInAckChan sets the chan handle receiving acks from scheduler.
-	SetInAckChan(chan Request)
+	SetInAckChan(ch chan Request)
 	// GetInAckChan gets the chan handle receiving acks from scheduler.
 	GetInAckChan() chan Request
 	// Handle triggers the processing of request.
-	Handle(ctx context.Context, req *Request) error
+	Handle(req *Request) error
 	// SendBy is a wrapper that triggers the RequestType_SendBy function
 	SendBy(e Edge, m Message, ts timestamp.Timestamp) error
 	// NotifyAt is a wrapper that triggers the RequestType_NotifyAt function
@@ -40,93 +42,49 @@ type Vertex interface {
 	// OnNotify registers RequestType_OnNotify function
 	OnNotify(f func(ts timestamp.Timestamp) error)
 	// Start starts a runtime for the vertex to handle dataflow.
-	Start(ctx context.Context, wg sync.WaitGroup) error
-}
-
-type VertexFunctionHook struct {
-	SendBy   func(e Edge, m Message, ts timestamp.Timestamp) error
-	NotifyAt func(v Vertex, ts timestamp.Timestamp) error
-	OnRecv   func(e Edge, m Message, ts timestamp.Timestamp) error
-	OnNotify func(ts timestamp.Timestamp) error
-}
-
-func (h *VertexFunctionHook) SetupExtChan(ch chan Request) {
-	h.SendBy = func(e Edge, m Message, ts timestamp.Timestamp) error {
-		ch <- Request{
-			Typ:  constants.RequestType_SendBy,
-			Edge: e,
-			Ts:   ts,
-			Msg:  m,
-		}
-		return nil
-	}
-
-	h.NotifyAt = func(v Vertex, ts timestamp.Timestamp) error {
-		id := v.GetId()
-		ch <- Request{
-			Typ:  constants.RequestType_NotifyAt,
-			Edge: NewEdge(id, id), // Since NotifyAt is calling at a vertex itself, just set the edge to be itself.
-			Ts:   ts,
-			Msg:  Message{},
-		}
-		return nil
-	}
-}
-
-func (h *VertexFunctionHook) SanityCheck(typ constants.RequestType) error {
-	if typ == constants.RequestType_SendBy {
-		if h.SendBy == nil {
-			return errors.New("hook has not set up SendBy function")
-		}
-	} else if typ == constants.RequestType_NotifyAt {
-		if h.NotifyAt == nil {
-			return errors.New("hook has not set up NotifyAt function")
-		}
-	} else if typ == constants.RequestType_OnRecv {
-		if h.OnRecv == nil {
-			return errors.New("hook has not set up OnRecv function")
-		}
-	} else if typ == constants.RequestType_OnNotify {
-		if h.OnNotify == nil {
-			return errors.New("hook has not set up OnNotify function")
-		}
-	} else {
-		return errors.New("invalid request type")
-	}
-
-	return nil
+	Start(wg sync.WaitGroup) error
 }
 
 type VertexCore struct {
+	ctx      context.Context
 	id       constants.VertexId
 	typ      constants.VertexType
 	extCh    chan Request
 	inTaskCh chan Request
 	inAckCh  chan Request
-	hook     VertexFunctionHook
+
+	FuncOnRecv   func(e Edge, m Message, ts timestamp.Timestamp) error
+	FuncOnNotify func(ts timestamp.Timestamp) error
 }
 
 func NewVertexCore() *VertexCore {
 	return &VertexCore{
+		ctx:      nil,
 		id:       0,
 		typ:      constants.VertexType_Generic,
 		extCh:    nil,
 		inTaskCh: nil,
 		inAckCh:  nil,
-		hook:     VertexFunctionHook{},
+
+		FuncOnRecv:   nil,
+		FuncOnNotify: nil,
 	}
 }
 
-func (v *VertexCore) Start(ctx context.Context, wg sync.WaitGroup) error {
+func (v *VertexCore) Start(wg sync.WaitGroup) error {
 	defer wg.Done()
 	for {
 		select {
 		case req := <-v.GetInTaskChan():
-			v.Handle(ctx, &req)
-		case <-ctx.Done():
+			v.Handle(&req)
+		case <-v.ctx.Done():
 			return nil
 		}
 	}
+}
+
+func (v *VertexCore) SetContext(ctx context.Context) {
+	v.ctx = ctx
 }
 
 func (v *VertexCore) SetId(id constants.VertexId) {
@@ -143,7 +101,6 @@ func (v *VertexCore) GetType() constants.VertexType {
 
 func (v *VertexCore) SetExtChan(ch chan Request) {
 	v.extCh = ch
-	v.hook.SetupExtChan(ch)
 }
 
 func (v *VertexCore) GetExtChan() chan Request {
@@ -166,12 +123,28 @@ func (v *VertexCore) GetInAckChan() chan Request {
 	return v.inAckCh
 }
 
+func (v *VertexCore) ReqSanityCheck(typ constants.RequestType) error {
+	if typ == constants.RequestType_OnRecv {
+		if v.FuncOnRecv == nil {
+			return errors.New("hook has not set up OnRecv function")
+		}
+	} else if typ == constants.RequestType_OnNotify {
+		if v.FuncOnNotify == nil {
+			return errors.New("hook has not set up OnNotify function")
+		}
+	} else {
+		return errors.New("invalid request type")
+	}
+
+	return nil
+}
+
 // Handle runs a function that has been registered by On().
-func (v *VertexCore) Handle(ctx context.Context, req *Request) error {
+func (v *VertexCore) Handle(req *Request) error {
 	typ := req.Typ
 
 	// Check if the function is already registered.
-	if err := v.hook.SanityCheck(typ); err != nil {
+	if err := v.ReqSanityCheck(typ); err != nil {
 		return err
 	}
 
@@ -179,63 +152,47 @@ func (v *VertexCore) Handle(ctx context.Context, req *Request) error {
 	e := req.Edge
 	m := req.Msg
 
-	// Handle things internally before triggering request.
-	v.PreFn(ctx, typ, e, &ts)
-
 	// Handle timestamp here when doing OnRecv or OnNotify.
 	// This is for Ingress, Egress and Feedback vertices.
 	newTs := timestamp.CopyTimestampFrom(&ts)
-	if typ == constants.RequestType_OnRecv ||
-		typ == constants.RequestType_OnNotify {
-		timestamp.HandleTimestamp(v.typ, newTs)
-	}
+	timestamp.HandleTimestamp(v.typ, newTs)
 
 	// Trigger the request for next data step.
-	if typ == constants.RequestType_SendBy {
-		v.hook.SendBy(e, m, ts)
-	} else if typ == constants.RequestType_NotifyAt {
-		v.hook.NotifyAt(v, ts)
-	} else if typ == constants.RequestType_OnRecv {
-		v.hook.OnRecv(e, m, ts)
+	if typ == constants.RequestType_OnRecv {
+		v.FuncOnRecv(e, m, ts)
 	} else if typ == constants.RequestType_OnNotify {
-		v.hook.OnNotify(ts)
+		v.FuncOnNotify(ts)
 	}
 
 	// Handle things internally after triggering request.
-	v.PostFn(ctx, typ, e, &ts)
+	v.PostFn(typ, e, &ts)
 
 	return nil
 }
 
 func (v *VertexCore) PreFn(
-	ctx context.Context,
-	typ constants.RequestType,
 	e Edge,
 	ts *timestamp.Timestamp,
 ) {
 	// According to the paper, in PreFn, there are two things to do with OC:
 	// When doing SendBy, OC[(t, e)] <- OC[(t, e)] + 1.
 	// When doing NotifyAt, OC[(t, v)] <- OC[(t, v)] + 1.
-	if typ == constants.RequestType_SendBy ||
-		typ == constants.RequestType_NotifyAt {
-		v.extCh <- Request{
-			Typ:  constants.RequestType_IncreOC,
-			Edge: e,
-			Ts:   *ts,
-			Msg:  Message{},
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-v.inAckCh: // TODO maybe error?
-			return
-		}
-
+	v.extCh <- Request{
+		Typ:  constants.RequestType_IncreOC,
+		Edge: e,
+		Ts:   *ts,
+		Msg:  Message{},
 	}
+	select {
+	case <-v.ctx.Done():
+		return
+	case <-v.inAckCh: // TODO maybe error?
+		return
+	}
+
 }
 
 func (v *VertexCore) PostFn(
-	ctx context.Context,
 	typ constants.RequestType,
 	e Edge,
 	ts *timestamp.Timestamp,
@@ -263,7 +220,7 @@ func (v *VertexCore) PostFn(
 			Msg:  Message{},
 		}
 		select {
-		case <-ctx.Done():
+		case <-v.ctx.Done():
 			return
 		case <-v.inAckCh: // TODO maybe error?
 			return
@@ -272,17 +229,49 @@ func (v *VertexCore) PostFn(
 }
 
 func (v *VertexCore) SendBy(e Edge, m Message, ts timestamp.Timestamp) error {
-	return v.hook.SendBy(e, m, ts)
+	ch := v.extCh
+	if ch == nil {
+		return errors.New("cannot do SendBy because extCh not set up")
+	}
+
+	// Handle things internally before triggering request.
+	v.PreFn(e, &ts)
+
+	ch <- Request{
+		Typ:  constants.RequestType_SendBy,
+		Edge: e,
+		Ts:   ts,
+		Msg:  m,
+	}
+	return nil
+
 }
 
 func (v *VertexCore) NotifyAt(ts timestamp.Timestamp) error {
-	return v.hook.NotifyAt(v, ts)
+	ch := v.extCh
+	if ch == nil {
+		return errors.New("cannot do NotifyAt because extCh not set up")
+	}
+
+	id := v.GetId()
+	edge := NewEdge(id, id)
+
+	// Handle things internally before triggering request.
+	v.PreFn(edge, &ts)
+
+	ch <- Request{
+		Typ:  constants.RequestType_NotifyAt,
+		Edge: edge, // Since NotifyAt is calling at a vertex itself, just set the edge to be itself.
+		Ts:   ts,
+		Msg:  Message{},
+	}
+	return nil
 }
 
 func (v *VertexCore) OnRecv(f func(e Edge, m Message, ts timestamp.Timestamp) error) {
-	v.hook.OnRecv = f
+	v.FuncOnRecv = f
 }
 
 func (v *VertexCore) OnNotify(f func(ts timestamp.Timestamp) error) {
-	v.hook.OnNotify = f
+	v.FuncOnNotify = f
 }

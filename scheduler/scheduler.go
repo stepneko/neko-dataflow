@@ -21,17 +21,22 @@ type Scheduler interface {
 }
 
 type SimpleScheduler struct {
-	nextId constants.VertexId
-	ch     chan vertex.Request
-	graph  *Graph
+	ctx        context.Context
+	cancelFunc context.CancelFunc
+	nextId     constants.VertexId
+	ch         chan vertex.Request
+	graph      *Graph
 }
 
 // NewScheduler returns a simple scheduler of neko-dataflow
 func NewScheduler() *SimpleScheduler {
+	ctx, cancelFunc := context.WithCancel(context.Background())
 	return &SimpleScheduler{
-		nextId: 0,
-		ch:     make(chan vertex.Request, 1024),
-		graph:  NewGraph(),
+		ctx:        ctx,
+		cancelFunc: cancelFunc,
+		nextId:     0,
+		ch:         make(chan vertex.Request, 1024),
+		graph:      NewGraph(),
 	}
 }
 
@@ -42,7 +47,8 @@ func (s *SimpleScheduler) CreateVertexId() constants.VertexId {
 }
 
 func (s *SimpleScheduler) RegisterVertex(v vertex.Vertex) {
-	// Set up id by scheduler
+	// Set up context and id by scheduler
+	v.SetContext(s.ctx)
 	v.SetId(s.CreateVertexId())
 
 	// Set up channel into scheduler
@@ -88,8 +94,7 @@ func (s *SimpleScheduler) Step() error {
 // Run starts the scheduler after all vertices are registered.
 // This also pre-processes and optimizes the graph.
 func (s *SimpleScheduler) Run() error {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	defer s.cancelFunc()
 
 	s.graph.PreProcess()
 
@@ -97,19 +102,19 @@ func (s *SimpleScheduler) Run() error {
 	for id := range s.graph.VertexMap {
 		wg.Add(1)
 		v := s.graph.VertexMap[id].vertex
-		go v.Start(ctx, wg)
+		go v.Start(wg)
 	}
 
-	go s.Serve(ctx)
+	go s.Serve()
 	wg.Wait()
 
 	return nil
 }
 
-func (s *SimpleScheduler) Serve(ctx context.Context) {
+func (s *SimpleScheduler) Serve() {
 	for {
 		select {
-		case <-ctx.Done():
+		case <-s.ctx.Done():
 			return
 		case req := <-s.ch:
 			if err := s.HandleReq(&req); err != nil {
