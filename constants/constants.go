@@ -1,5 +1,7 @@
 package constants
 
+type VertexId int
+
 type VertexType int
 
 const (

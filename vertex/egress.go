@@ -5,12 +5,12 @@ import (
 )
 
 type EgressVertex struct {
-	GenericVertex
+	VertexCore
 }
 
 func NewEgressVertex() *EgressVertex {
 	vertex := EgressVertex{
-		*NewGenericVertex(),
+		*NewVertexCore(),
 	}
 	vertex.typ = constants.VertexType_Egress
 	return &vertex

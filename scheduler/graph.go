@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/stepneko/neko-dataflow/constants"
 	"github.com/stepneko/neko-dataflow/timestamp"
@@ -23,45 +24,45 @@ func NewNode(v vertex.Vertex) *Node {
 type Graph struct {
 	// A quick look up table to find Nodes in the graph
 	// given input vertex
-	vertexMap map[vertex.Vertex]*Node
+	VertexMap map[constants.VertexId]*Node
 	// Occurrence counts and precursor counts map for pointstamps.
 	// Key should be pointstamp, but since pointstamp is a struct
 	// and is not natively hashable, we use string as key, which is the
 	// digest hash of pointstamp.
-	activePsMap map[string]*PointstampCounter
+	ActivePsMap map[string]*PointstampCounter
 }
 
 func NewGraph() *Graph {
 	return &Graph{
-		vertexMap:   make(map[vertex.Vertex]*Node),
-		activePsMap: make(map[string]*PointstampCounter),
+		VertexMap:   make(map[constants.VertexId]*Node),
+		ActivePsMap: make(map[string]*PointstampCounter),
 	}
 }
 
 func (g *Graph) InsertVertex(v vertex.Vertex) {
-	_, exist := g.vertexMap[v]
+	id := v.GetId()
+	_, exist := g.VertexMap[id]
 	if !exist {
 		node := NewNode(v)
-		g.vertexMap[v] = node
+		g.VertexMap[id] = node
 	}
 }
 
-func (g *Graph) InsertEdge(e vertex.Edge) {
+func (g *Graph) InsertEdge(e vertex.Edge) error {
 	src := e.GetSrc()
-	srcNode, exist := g.vertexMap[src]
+	srcNode, exist := g.VertexMap[src]
 	if !exist {
-		srcNode = NewNode(src)
-		g.vertexMap[src] = srcNode
+		return errors.New(fmt.Sprintf("src vertex not registered with id: %d", src))
 	}
 
 	target := e.GetTarget()
-	targetNode, exist := g.vertexMap[target]
+	targetNode, exist := g.VertexMap[target]
 	if !exist {
-		targetNode = NewNode(target)
-		g.vertexMap[target] = targetNode
+		return errors.New(fmt.Sprintf("target vertex not registered with id: %d", target))
 	}
 
 	srcNode.children[targetNode] = true
+	return nil
 }
 
 // When a pointstamp p becomes active, the scheduler initializes its precursor count
@@ -69,27 +70,35 @@ func (g *Graph) InsertEdge(e vertex.Edge) {
 // At the same time, the scheduler increments the precursor count of any pointstamp that p could-result-in.
 func (g *Graph) IncreOC(ps Pointstamp) error {
 	psHash := ps.Hash()
-	if _, exist := g.activePsMap[psHash]; !exist {
+	if _, exist := g.ActivePsMap[psHash]; !exist {
 		psCounter := &PointstampCounter{
 			PS: ps,
 			OC: 0,
 			PC: 0,
 		}
-		for currPsHash := range g.activePsMap {
-			currPs := g.activePsMap[currPsHash].PS
-			if g.CouldResultIn(currPs, ps) {
+		for currPsHash := range g.ActivePsMap {
+			currPs := g.ActivePsMap[currPsHash].PS
+			res, err := g.CouldResultIn(currPs, ps)
+			if err != nil {
+				return err
+			}
+			if res {
 				psCounter.PC += 1
 			}
 		}
-		for currPsHash := range g.activePsMap {
-			currPs := g.activePsMap[currPsHash].PS
-			if g.CouldResultIn(ps, currPs) {
-				g.activePsMap[currPsHash].PC += 1
+		for currPsHash := range g.ActivePsMap {
+			currPs := g.ActivePsMap[currPsHash].PS
+			res, err := g.CouldResultIn(ps, currPs)
+			if err != nil {
+				return err
+			}
+			if res {
+				g.ActivePsMap[currPsHash].PC += 1
 			}
 		}
-		g.activePsMap[psHash] = psCounter
+		g.ActivePsMap[psHash] = psCounter
 	}
-	g.activePsMap[psHash].OC += 1
+	g.ActivePsMap[psHash].OC += 1
 	return nil
 }
 
@@ -100,17 +109,21 @@ func (g *Graph) IncreOC(ps Pointstamp) error {
 // The scheduler may deliver any notification in the frontier.
 func (g *Graph) DecreOC(ps Pointstamp) error {
 	psHash := ps.Hash()
-	_, exist := g.activePsMap[psHash]
+	_, exist := g.ActivePsMap[psHash]
 	if !exist {
 		return errors.New("trying to decre a pointstamp which does not exist in active pointstamp map")
 	}
-	g.activePsMap[psHash].OC -= 1
-	if g.activePsMap[psHash].OC == 0 {
-		delete(g.activePsMap, psHash)
-		for currPsHash := range g.activePsMap {
-			currPs := g.activePsMap[currPsHash].PS
-			if g.CouldResultIn(ps, currPs) {
-				g.activePsMap[currPsHash].PC -= 1
+	g.ActivePsMap[psHash].OC -= 1
+	if g.ActivePsMap[psHash].OC == 0 {
+		delete(g.ActivePsMap, psHash)
+		for currPsHash := range g.ActivePsMap {
+			currPs := g.ActivePsMap[currPsHash].PS
+			res, err := g.CouldResultIn(ps, currPs)
+			if err != nil {
+				return err
+			}
+			if res {
+				g.ActivePsMap[currPsHash].PC -= 1
 			}
 		}
 	}
@@ -118,52 +131,64 @@ func (g *Graph) DecreOC(ps Pointstamp) error {
 }
 
 // CouldResultIn traverses the graph and computes whether pointstamp a could result in pointstamp b
-func (g *Graph) CouldResultIn(a Pointstamp, b Pointstamp) bool {
+func (g *Graph) CouldResultIn(a Pointstamp, b Pointstamp) (bool, error) {
 	// Traverse from pointstamp a until it reaches pointstamp b
 	// Therefore we pick target of a as starting point, until it reaches src of b
-	visited := make(map[vertex.Vertex]*timestamp.Timestamp)
-	srcVertex := a.GetTarget()
+	visited := make(map[constants.VertexId]*timestamp.Timestamp)
+	srcId := a.GetTarget()
+	srcNode, exist := g.VertexMap[srcId]
+	if !exist {
+		return false, errors.New(fmt.Sprintf("src not registered with id: %d", srcId))
+	}
+	srcVertex := srcNode.vertex
 	// The srcTs is the timestamp getting out of the a edge.
 	// Therefore it has to be processed by target vertex of that edge.
 	srcTs := timestamp.CopyTimestampFrom(a.GetTimestamp())
 	timestamp.HandleTimestamp(srcVertex.GetType(), srcTs)
-	targetVertex := b.GetSrc()
+	targetId := b.GetSrc()
+	_, exist = g.VertexMap[targetId]
+	if !exist {
+		return false, errors.New(fmt.Sprintf("target not registered with id: %d", targetId))
+	}
 	targetTs := b.GetTimestamp()
-	queue := []*VertexPointStamp{NewVertexPointStamp(srcVertex, srcTs)}
+	queue := []*VertexPointStamp{NewVertexPointStamp(srcId, srcTs)}
 
 	// Start BFS traversal
 	for len(queue) != 0 {
 		currPs := queue[0]
 		queue = queue[1:]
 
-		currVertex := currPs.GetSrc()
+		currId := currPs.GetSrc()
+		currNode, exist := g.VertexMap[currId]
+		if !exist {
+			return false, errors.New(fmt.Sprintf("vertex not registered with id: %d", currId))
+		}
 		currTs := currPs.GetTimestamp()
 
-		if currVertex == targetVertex && timestamp.LE(currTs, targetTs) {
-			return true
+		if currId == targetId && timestamp.LE(currTs, targetTs) {
+			return true, nil
 		}
 
-		if prevTs, exist := visited[currVertex]; exist {
+		if prevTs, exist := visited[currId]; exist {
 			// If we already reached this currVertex with a smaller timestamp,
 			// then just stop traversing from this current later timestamp.
 			if timestamp.LE(prevTs, currTs) {
 				continue
 			}
 		}
-		visited[currVertex] = currTs
+		visited[currId] = currTs
 
 		// Now go to node to traverse graph
-		currNode := g.vertexMap[currVertex]
 		for childNode := range currNode.children {
 			childVertex := childNode.vertex
 			// Handle timestamp according to the child vertex
 			newTs := timestamp.CopyTimestampFrom(currTs)
 			timestamp.HandleTimestamp(childVertex.GetType(), newTs)
-			newPs := NewVertexPointStamp(childVertex, newTs)
+			newPs := NewVertexPointStamp(childVertex.GetId(), newTs)
 			queue = append(queue, newPs)
 		}
 	}
-	return false
+	return false, nil
 }
 
 func (g *Graph) PreProcess() {
@@ -181,11 +206,12 @@ func (g *Graph) PreProcess() {
 	// closed it removes any active pointstamps at its location,
 	// allowing all events downstream of the input to eventually
 	// drain from the computation.
-	for v := range g.vertexMap {
+	for vertexId := range g.VertexMap {
+		v := g.VertexMap[vertexId].vertex
 		if v.GetType() == constants.VertexType_Input {
 			ts := timestamp.NewTimestamp()
-			ps := NewVertexPointStamp(v, ts)
-			g.activePsMap[ps.Hash()] = &PointstampCounter{
+			ps := NewVertexPointStamp(vertexId, ts)
+			g.ActivePsMap[ps.Hash()] = &PointstampCounter{
 				PS: ps,
 				OC: 1,
 				PC: 0,
