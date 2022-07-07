@@ -52,6 +52,7 @@ type VertexCore struct {
 	extCh    chan Request
 	inTaskCh chan Request
 	inAckCh  chan Request
+	currTs   timestamp.Timestamp
 
 	FuncOnRecv   func(e Edge, m Message, ts timestamp.Timestamp) error
 	FuncOnNotify func(ts timestamp.Timestamp) error
@@ -65,6 +66,7 @@ func NewVertexCore() *VertexCore {
 		extCh:    nil,
 		inTaskCh: nil,
 		inAckCh:  nil,
+		currTs:   *timestamp.NewTimestamp(),
 
 		FuncOnRecv:   nil,
 		FuncOnNotify: nil,
@@ -152,6 +154,8 @@ func (v *VertexCore) Handle(req *Request) error {
 	e := req.Edge
 	m := req.Msg
 
+	v.currTs = ts
+
 	// Handle timestamp here when doing OnRecv or OnNotify.
 	// This is for Ingress, Egress and Feedback vertices.
 	newTs := timestamp.CopyTimestampFrom(&ts)
@@ -173,8 +177,19 @@ func (v *VertexCore) Handle(req *Request) error {
 func (v *VertexCore) PreFn(
 	e Edge,
 	ts *timestamp.Timestamp,
-) {
-	// According to the paper, in PreFn, there are two things to do with OC:
+) error {
+
+	// The OnRecv and OnNotify methods may contain
+	// arbitrary code and modify arbitrary per-vertex state, but
+	// do have an important constraint on their execution: when
+	// invoked with a timestamp t, the methods may only call
+	// SendBy or NotifyAt with times t′ ≥ t.
+	// This rule guarantees that messages are not sent “backwards in time”
+	if !timestamp.LE(&v.currTs, ts) {
+		return errors.New("cannot do SendBy or NotifyAt to an earlier timestamp")
+	}
+
+	// Per the paper, in PreFn, there are two things to do with OC:
 	// When doing SendBy, OC[(t, e)] <- OC[(t, e)] + 1.
 	// When doing NotifyAt, OC[(t, v)] <- OC[(t, v)] + 1.
 	v.extCh <- Request{
@@ -185,9 +200,9 @@ func (v *VertexCore) PreFn(
 	}
 	select {
 	case <-v.ctx.Done():
-		return
+		return nil
 	case <-v.inAckCh: // TODO maybe error?
-		return
+		return nil
 	}
 
 }
@@ -235,7 +250,9 @@ func (v *VertexCore) SendBy(e Edge, m Message, ts timestamp.Timestamp) error {
 	}
 
 	// Handle things internally before triggering request.
-	v.PreFn(e, &ts)
+	if err := v.PreFn(e, &ts); err != nil {
+		return err
+	}
 
 	ch <- Request{
 		Typ:  constants.RequestType_SendBy,
@@ -257,7 +274,9 @@ func (v *VertexCore) NotifyAt(ts timestamp.Timestamp) error {
 	edge := NewEdge(id, id)
 
 	// Handle things internally before triggering request.
-	v.PreFn(edge, &ts)
+	if err := v.PreFn(edge, &ts); err != nil {
+		return err
+	}
 
 	ch <- Request{
 		Typ:  constants.RequestType_NotifyAt,
