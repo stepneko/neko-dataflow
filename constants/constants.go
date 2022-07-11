@@ -10,6 +10,18 @@ const (
 	VertexType_Egress   VertexType = 3
 	VertexType_Feedback VertexType = 4
 	VertexType_Input    VertexType = 5
+	VertexType_Unary    VertexType = 6
+	VertexType_Bianry   VertexType = 7
+)
+
+const VertexInDirs int = 2
+
+type VertexInDir int
+
+const (
+	VertexInDir_Default VertexInDir = 0 // Default vertex inward direction, pointing to left
+	VertexInDir_Left    VertexInDir = 0 // Pointing to left of target vertex
+	VertexInDir_Right   VertexInDir = 1 // Pointing to right of target vertex
 )
 
 type RequestType int

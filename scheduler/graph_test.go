@@ -35,13 +35,13 @@ func BuildGraph(t *testing.T, g *Graph, vsp *[]vertex.Vertex) {
 		g.InsertVertex(v)
 	}
 
-	g.InsertEdge(vertex.NewEdge(vs[0].GetId(), vs[1].GetId()))
-	g.InsertEdge(vertex.NewEdge(vs[1].GetId(), vs[2].GetId()))
-	g.InsertEdge(vertex.NewEdge(vs[2].GetId(), vs[3].GetId()))
-	g.InsertEdge(vertex.NewEdge(vs[3].GetId(), vs[4].GetId()))
-	g.InsertEdge(vertex.NewEdge(vs[4].GetId(), vs[2].GetId()))
-	g.InsertEdge(vertex.NewEdge(vs[3].GetId(), vs[5].GetId()))
-	g.InsertEdge(vertex.NewEdge(vs[5].GetId(), vs[6].GetId()))
+	g.InsertEdge(vertex.NewEdge(vs[0].GetId(), vs[1].GetId()), constants.VertexInDir_Default)
+	g.InsertEdge(vertex.NewEdge(vs[1].GetId(), vs[2].GetId()), constants.VertexInDir_Default)
+	g.InsertEdge(vertex.NewEdge(vs[2].GetId(), vs[3].GetId()), constants.VertexInDir_Default)
+	g.InsertEdge(vertex.NewEdge(vs[3].GetId(), vs[4].GetId()), constants.VertexInDir_Default)
+	g.InsertEdge(vertex.NewEdge(vs[4].GetId(), vs[2].GetId()), constants.VertexInDir_Default)
+	g.InsertEdge(vertex.NewEdge(vs[3].GetId(), vs[5].GetId()), constants.VertexInDir_Default)
+	g.InsertEdge(vertex.NewEdge(vs[5].GetId(), vs[6].GetId()), constants.VertexInDir_Default)
 
 	assert.Equal(t, len(g.VertexMap[vs[0].GetId()].children), 1)
 	assert.Equal(t, len(g.VertexMap[vs[1].GetId()].children), 1)
@@ -71,7 +71,7 @@ func TestInsertEdge(t *testing.T) {
 	v2.SetId(2)
 	g.InsertVertex(v2)
 	e1 := vertex.NewEdge(v1.GetId(), v2.GetId())
-	g.InsertEdge(e1)
+	g.InsertEdge(e1, constants.VertexInDir_Default)
 
 	node1, exist := g.VertexMap[v1.GetId()]
 	assert.Equal(t, exist, true)
@@ -90,7 +90,7 @@ func TestInsertEdge(t *testing.T) {
 	v3.SetId(3)
 	g.InsertVertex(v3)
 	e2 := vertex.NewEdge(v2.GetId(), v3.GetId())
-	g.InsertEdge(e2)
+	g.InsertEdge(e2, constants.VertexInDir_Default)
 
 	newNode2, exist := g.VertexMap[v2.GetId()]
 	assert.Equal(t, exist, true)

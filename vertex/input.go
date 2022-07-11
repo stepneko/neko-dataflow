@@ -17,9 +17,9 @@ func NewInputVertex() *InputVertex {
 	return &vertex
 }
 
-func (i *InputVertex) Send(ts timestamp.Timestamp, m Message) {
-	ch := i.GetInTaskChan()
-	id := i.GetId()
+func (v *InputVertex) Send(ts timestamp.Timestamp, m Message) {
+	ch := v.GetInTaskChans()[constants.VertexInDir_Default]
+	id := v.GetId()
 	req := Request{
 		Typ:  constants.RequestType_OnRecv,
 		Edge: NewEdge(id, id),
@@ -29,9 +29,9 @@ func (i *InputVertex) Send(ts timestamp.Timestamp, m Message) {
 	ch <- req
 }
 
-func (i *InputVertex) Notify(ts timestamp.Timestamp) {
-	ch := i.GetInTaskChan()
-	id := i.GetId()
+func (v *InputVertex) Notify(ts timestamp.Timestamp) {
+	ch := v.GetInTaskChans()[constants.VertexInDir_Default]
+	id := v.GetId()
 	req := Request{
 		Typ:  constants.RequestType_OnNotify,
 		Edge: NewEdge(id, id),

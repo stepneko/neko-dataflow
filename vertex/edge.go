@@ -14,7 +14,10 @@ type EdgeCore struct {
 	target constants.VertexId
 }
 
-func NewEdge(src constants.VertexId, target constants.VertexId) *EdgeCore {
+func NewEdge(
+	src constants.VertexId,
+	target constants.VertexId,
+) *EdgeCore {
 	return &EdgeCore{
 		src,
 		target,
