@@ -58,8 +58,13 @@ func (s *SimpleScheduler) RegisterVertex(v vertex.Vertex) {
 	v.SetExtChan(s.ch)
 
 	// Set up vertex status in scheduler and channels in vertex
-	taskChan := make(chan vertex.Request, 1024)
-	v.SetInTaskChan(taskChan)
+	taskChans := [constants.VertexInDirs]chan vertex.Request{}
+	taskChans[constants.VertexInDir_Left] = make(chan vertex.Request, 1024)
+	// If the vertex is a binary vertex, it has a taskChan2.
+	if v.GetType() == constants.VertexType_Bianry {
+		taskChans[constants.VertexInDir_Right] = make(chan vertex.Request, 1024)
+	}
+	v.SetInTaskChans(taskChans)
 
 	// Set up ack channel from scheduler to vertex
 	ackChan := make(chan vertex.Request, 1024)
@@ -72,6 +77,7 @@ func (s *SimpleScheduler) RegisterVertex(v vertex.Vertex) {
 func (s *SimpleScheduler) BuildEdge(
 	src vertex.Vertex,
 	target vertex.Vertex,
+	dir constants.VertexInDir,
 ) (vertex.Edge, error) {
 	if src == nil {
 		return nil, errors.New("src vertex cannot be nil")
@@ -81,7 +87,7 @@ func (s *SimpleScheduler) BuildEdge(
 	}
 
 	e := vertex.NewEdge(src.GetId(), target.GetId())
-	s.graph.InsertEdge(e)
+	s.graph.InsertEdge(e, dir)
 
 	return e, nil
 }
@@ -199,12 +205,20 @@ func (s *SimpleScheduler) DecreOC(req *vertex.Request) error {
 
 func (s *SimpleScheduler) SendBy(req *vertex.Request) error {
 	e := req.Edge
+	src := e.GetSrc()
 	target := e.GetTarget()
 	node, exist := s.graph.VertexMap[target]
 	if !exist {
-		return errors.New(fmt.Sprintf("vertex not found when doing SendBy with id: %d", target))
+		return errors.New(fmt.Sprintf("vertex not found in graph when doing SendBy with id: %d", target))
 	}
-	ch := node.vertex.GetInTaskChan()
+	dir, err := s.graph.GetDir(src, target)
+	if err != nil {
+		return err
+	}
+	ch := node.vertex.GetInTaskChans()[dir]
+	if ch == nil {
+		return errors.New("target vertex is not set up with request channel when doing SendBy")
+	}
 	ch <- vertex.Request{
 		Typ:  constants.RequestType_OnRecv,
 		Edge: e,
@@ -221,7 +235,11 @@ func (s *SimpleScheduler) NotifyAt(req *vertex.Request) error {
 	if !exist {
 		return errors.New(fmt.Sprintf("vertex not found with doing NotifyAt with id: %d", target))
 	}
-	node.vertex.GetInTaskChan() <- vertex.Request{
+	ch := node.vertex.GetInTaskChans()[constants.VertexInDir_Default]
+	if ch == nil {
+		return errors.New("target vertex is not set up with request channel when doing NotifyAt")
+	}
+	ch <- vertex.Request{
 		Typ:  constants.RequestType_OnNotify,
 		Edge: e,
 		Ts:   req.Ts,

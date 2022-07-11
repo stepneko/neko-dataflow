@@ -3,6 +3,7 @@ package vertex
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/stepneko/neko-dataflow/constants"
@@ -24,52 +25,52 @@ type Vertex interface {
 	// GetExtChan gets the chan handle sending requests to scheduler.
 	GetExtChan() chan Request
 	// SetInTaskChan sets the chan handle receiving task requests from scheduler.
-	SetInTaskChan(ch chan Request)
+	SetInTaskChans(chs [constants.VertexInDirs]chan Request)
 	// GetInTaskChan gets the chan handle receiving task requests from scheduler.
-	GetInTaskChan() chan Request
+	GetInTaskChans() [constants.VertexInDirs]chan Request
 	// SetInAckChan sets the chan handle receiving acks from scheduler.
 	SetInAckChan(ch chan Request)
 	// GetInAckChan gets the chan handle receiving acks from scheduler.
 	GetInAckChan() chan Request
 	// Handle triggers the processing of request.
-	Handle(req *Request) error
+	Handle(req *Request, dir constants.VertexInDir) error
 	// SendBy is a wrapper that triggers the RequestType_SendBy function
 	SendBy(e Edge, m Message, ts timestamp.Timestamp) error
 	// NotifyAt is a wrapper that triggers the RequestType_NotifyAt function
 	NotifyAt(ts timestamp.Timestamp) error
 	// OnRecv registers RequestType_OnRecv function
-	OnRecv(f func(e Edge, m Message, ts timestamp.Timestamp) error)
+	OnRecv(f func(e Edge, m Message, ts timestamp.Timestamp) error, dir constants.VertexInDir)
 	// OnNotify registers RequestType_OnNotify function
-	OnNotify(f func(ts timestamp.Timestamp) error)
+	OnNotify(f func(ts timestamp.Timestamp) error, dir constants.VertexInDir)
 	// Start starts a runtime for the vertex to handle dataflow.
 	Start(wg sync.WaitGroup) error
 }
 
 type VertexCore struct {
-	ctx      context.Context
-	id       constants.VertexId
-	typ      constants.VertexType
-	extCh    chan Request
-	inTaskCh chan Request
-	inAckCh  chan Request
-	currTs   timestamp.Timestamp
+	ctx     context.Context
+	id      constants.VertexId
+	typ     constants.VertexType
+	currTs  timestamp.Timestamp
+	extCh   chan Request
+	inAckCh chan Request
 
-	FuncOnRecv   func(e Edge, m Message, ts timestamp.Timestamp) error
-	FuncOnNotify func(ts timestamp.Timestamp) error
+	inTaskChs      [constants.VertexInDirs]chan Request
+	FuncOnRecvs    [constants.VertexInDirs]func(e Edge, m Message, ts timestamp.Timestamp) error
+	FuncOnNotifies [constants.VertexInDirs]func(ts timestamp.Timestamp) error
 }
 
 func NewVertexCore() *VertexCore {
 	return &VertexCore{
-		ctx:      nil,
-		id:       0,
-		typ:      constants.VertexType_Generic,
-		extCh:    nil,
-		inTaskCh: nil,
-		inAckCh:  nil,
-		currTs:   *timestamp.NewTimestamp(),
+		ctx:     nil,
+		id:      0,
+		typ:     constants.VertexType_Generic,
+		extCh:   nil,
+		inAckCh: nil,
+		currTs:  *timestamp.NewTimestamp(),
 
-		FuncOnRecv:   nil,
-		FuncOnNotify: nil,
+		inTaskChs:      [constants.VertexInDirs]chan Request{},
+		FuncOnRecvs:    [constants.VertexInDirs]func(e Edge, m Message, ts timestamp.Timestamp) error{},
+		FuncOnNotifies: [constants.VertexInDirs]func(ts timestamp.Timestamp) error{},
 	}
 }
 
@@ -77,8 +78,10 @@ func (v *VertexCore) Start(wg sync.WaitGroup) error {
 	defer wg.Done()
 	for {
 		select {
-		case req := <-v.GetInTaskChan():
-			v.Handle(&req)
+		case req := <-v.inTaskChs[constants.VertexInDir_Left]:
+			v.Handle(&req, constants.VertexInDir_Left)
+		case req := <-v.inTaskChs[constants.VertexInDir_Right]:
+			v.Handle(&req, constants.VertexInDir_Right)
 		case <-v.ctx.Done():
 			return nil
 		}
@@ -109,12 +112,12 @@ func (v *VertexCore) GetExtChan() chan Request {
 	return v.extCh
 }
 
-func (v *VertexCore) SetInTaskChan(ch chan Request) {
-	v.inTaskCh = ch
+func (v *VertexCore) SetInTaskChans(chs [constants.VertexInDirs]chan Request) {
+	v.inTaskChs = chs
 }
 
-func (v *VertexCore) GetInTaskChan() chan Request {
-	return v.inTaskCh
+func (v *VertexCore) GetInTaskChans() [constants.VertexInDirs]chan Request {
+	return v.inTaskChs
 }
 
 func (v *VertexCore) SetInAckChan(ch chan Request) {
@@ -125,14 +128,17 @@ func (v *VertexCore) GetInAckChan() chan Request {
 	return v.inAckCh
 }
 
-func (v *VertexCore) ReqSanityCheck(typ constants.RequestType) error {
+func (v *VertexCore) ReqSanityCheck(
+	typ constants.RequestType,
+	dir constants.VertexInDir,
+) error {
 	if typ == constants.RequestType_OnRecv {
-		if v.FuncOnRecv == nil {
-			return errors.New("hook has not set up OnRecv function")
+		if v.FuncOnRecvs[dir] == nil {
+			return errors.New(fmt.Sprintf("vertex has not set up OnRecv function on dir %d", dir))
 		}
 	} else if typ == constants.RequestType_OnNotify {
-		if v.FuncOnNotify == nil {
-			return errors.New("hook has not set up OnNotify function")
+		if v.FuncOnNotifies[dir] == nil {
+			return errors.New(fmt.Sprintf("vertex has not set up OnNotify function on dir %d", dir))
 		}
 	} else {
 		return errors.New("invalid request type")
@@ -141,12 +147,12 @@ func (v *VertexCore) ReqSanityCheck(typ constants.RequestType) error {
 	return nil
 }
 
-// Handle runs a function that has been registered by On().
-func (v *VertexCore) Handle(req *Request) error {
+// Handle handles requests from directions of incoming task channels.
+func (v *VertexCore) Handle(req *Request, dir constants.VertexInDir) error {
 	typ := req.Typ
 
 	// Check if the function is already registered.
-	if err := v.ReqSanityCheck(typ); err != nil {
+	if err := v.ReqSanityCheck(typ, dir); err != nil {
 		return err
 	}
 
@@ -163,9 +169,9 @@ func (v *VertexCore) Handle(req *Request) error {
 
 	// Trigger the request for next data step.
 	if typ == constants.RequestType_OnRecv {
-		v.FuncOnRecv(e, m, ts)
+		v.FuncOnRecvs[dir](e, m, ts)
 	} else if typ == constants.RequestType_OnNotify {
-		v.FuncOnNotify(ts)
+		v.FuncOnNotifies[dir](ts)
 	}
 
 	// Handle things internally after triggering request.
@@ -287,10 +293,16 @@ func (v *VertexCore) NotifyAt(ts timestamp.Timestamp) error {
 	return nil
 }
 
-func (v *VertexCore) OnRecv(f func(e Edge, m Message, ts timestamp.Timestamp) error) {
-	v.FuncOnRecv = f
+func (v *VertexCore) OnRecv(
+	f func(e Edge, m Message, ts timestamp.Timestamp) error,
+	dir constants.VertexInDir,
+) {
+	v.FuncOnRecvs[dir] = f
 }
 
-func (v *VertexCore) OnNotify(f func(ts timestamp.Timestamp) error) {
-	v.FuncOnNotify = f
+func (v *VertexCore) OnNotify(
+	f func(ts timestamp.Timestamp) error,
+	dir constants.VertexInDir,
+) {
+	v.FuncOnNotifies[dir] = f
 }

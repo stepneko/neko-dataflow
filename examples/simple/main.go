@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/stepneko/neko-dataflow/constants"
 	"github.com/stepneko/neko-dataflow/scheduler"
 	"github.com/stepneko/neko-dataflow/timestamp"
 	"github.com/stepneko/neko-dataflow/vertex"
@@ -29,7 +30,7 @@ func main() {
 	s.RegisterVertex(v1)
 
 	// Create an edge between them.
-	e1, err := s.BuildEdge(input, v1)
+	e1, err := s.BuildEdge(input, v1, constants.VertexInDir_Default)
 	if err != nil {
 		zap.L().Error(err.Error())
 		return
@@ -40,7 +41,7 @@ func main() {
 	// Register it to the scheduler
 	s.RegisterVertex(v2)
 
-	e2, err := s.BuildEdge(v1, v2)
+	e2, err := s.BuildEdge(v1, v2, constants.VertexInDir_Default)
 	if err != nil {
 		zap.L().Error(err.Error())
 		return
@@ -51,29 +52,29 @@ func main() {
 		println("input on recv: " + m.ToString())
 		input.SendBy(e1, m, ts)
 		return nil
-	})
+	}, constants.VertexInDir_Default)
 	input.OnNotify(func(ts timestamp.Timestamp) error {
 		println("input on notify")
 		return nil
-	})
+	}, constants.VertexInDir_Default)
 
 	v1.OnRecv(func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
 		println("v1 on recv: " + m.ToString())
 		v1.SendBy(e2, m, ts)
 		return nil
-	})
+	}, constants.VertexInDir_Default)
 	v1.OnNotify(func(ts timestamp.Timestamp) error {
 		println("v1 on notify")
 		return nil
-	})
+	}, constants.VertexInDir_Default)
 	v2.OnRecv(func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
 		println("v2 on recv: " + m.ToString())
 		return nil
-	})
+	}, constants.VertexInDir_Default)
 	v2.OnNotify(func(ts timestamp.Timestamp) error {
 		println("v2 on notify")
 		return nil
-	})
+	}, constants.VertexInDir_Default)
 
 	// Start the scheduler
 	go s.Run()

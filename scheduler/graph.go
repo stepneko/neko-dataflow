@@ -25,6 +25,9 @@ type Graph struct {
 	// A quick look up table to find Nodes in the graph
 	// given input vertex
 	VertexMap map[constants.VertexId]*Node
+	// Map recording if an edge from src vertex A to target vertex B is
+	// pointing to the left or right of the target B.
+	DirsMap map[constants.VertexId]map[constants.VertexId]constants.VertexInDir
 	// Occurrence counts and precursor counts map for pointstamps.
 	// Key should be pointstamp, but since pointstamp is a struct
 	// and is not natively hashable, we use string as key, which is the
@@ -35,6 +38,7 @@ type Graph struct {
 func NewGraph() *Graph {
 	return &Graph{
 		VertexMap:   make(map[constants.VertexId]*Node),
+		DirsMap:     make(map[constants.VertexId]map[constants.VertexId]constants.VertexInDir),
 		ActivePsMap: make(map[string]*PointstampCounter),
 	}
 }
@@ -48,7 +52,7 @@ func (g *Graph) InsertVertex(v vertex.Vertex) {
 	}
 }
 
-func (g *Graph) InsertEdge(e vertex.Edge) error {
+func (g *Graph) InsertEdge(e vertex.Edge, dir constants.VertexInDir) error {
 	src := e.GetSrc()
 	srcNode, exist := g.VertexMap[src]
 	if !exist {
@@ -62,7 +66,26 @@ func (g *Graph) InsertEdge(e vertex.Edge) error {
 	}
 
 	srcNode.children[targetNode] = true
+
+	// Mark the edge is pointing to left or right of the target vertex
+	if _, exist := g.DirsMap[src]; !exist {
+		g.DirsMap[src] = make(map[constants.VertexId]constants.VertexInDir)
+	}
+	g.DirsMap[src][target] = dir
+
 	return nil
+}
+
+func (g *Graph) GetDir(src constants.VertexId, target constants.VertexId) (constants.VertexInDir, error) {
+	m, exist := g.DirsMap[src]
+	if !exist {
+		return constants.VertexInDir_Default, errors.New("src not found in DirMap in graph")
+	}
+	dir, exist := m[target]
+	if !exist {
+		return constants.VertexInDir_Default, errors.New("target not found in DirMap in geraph")
+	}
+	return dir, nil
 }
 
 // When a pointstamp p becomes active, the scheduler initializes its precursor count
