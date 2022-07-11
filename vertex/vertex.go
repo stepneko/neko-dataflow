@@ -55,8 +55,8 @@ type VertexCore struct {
 	inAckCh chan Request
 
 	inTaskChs      [constants.VertexInDirs]chan Request
-	FuncOnRecvs    [constants.VertexInDirs]func(e Edge, m Message, ts timestamp.Timestamp) error
-	FuncOnNotifies [constants.VertexInDirs]func(ts timestamp.Timestamp) error
+	funcOnRecvs    [constants.VertexInDirs]func(e Edge, m Message, ts timestamp.Timestamp) error
+	funcOnNotifies [constants.VertexInDirs]func(ts timestamp.Timestamp) error
 }
 
 func NewVertexCore() *VertexCore {
@@ -69,8 +69,8 @@ func NewVertexCore() *VertexCore {
 		currTs:  *timestamp.NewTimestamp(),
 
 		inTaskChs:      [constants.VertexInDirs]chan Request{},
-		FuncOnRecvs:    [constants.VertexInDirs]func(e Edge, m Message, ts timestamp.Timestamp) error{},
-		FuncOnNotifies: [constants.VertexInDirs]func(ts timestamp.Timestamp) error{},
+		funcOnRecvs:    [constants.VertexInDirs]func(e Edge, m Message, ts timestamp.Timestamp) error{},
+		funcOnNotifies: [constants.VertexInDirs]func(ts timestamp.Timestamp) error{},
 	}
 }
 
@@ -133,11 +133,11 @@ func (v *VertexCore) ReqSanityCheck(
 	dir constants.VertexInDir,
 ) error {
 	if typ == constants.RequestType_OnRecv {
-		if v.FuncOnRecvs[dir] == nil {
+		if v.funcOnRecvs[dir] == nil {
 			return errors.New(fmt.Sprintf("vertex has not set up OnRecv function on dir %d", dir))
 		}
 	} else if typ == constants.RequestType_OnNotify {
-		if v.FuncOnNotifies[dir] == nil {
+		if v.funcOnNotifies[dir] == nil {
 			return errors.New(fmt.Sprintf("vertex has not set up OnNotify function on dir %d", dir))
 		}
 	} else {
@@ -169,9 +169,9 @@ func (v *VertexCore) Handle(req *Request, dir constants.VertexInDir) error {
 
 	// Trigger the request for next data step.
 	if typ == constants.RequestType_OnRecv {
-		v.FuncOnRecvs[dir](e, m, ts)
+		v.funcOnRecvs[dir](e, m, ts)
 	} else if typ == constants.RequestType_OnNotify {
-		v.FuncOnNotifies[dir](ts)
+		v.funcOnNotifies[dir](ts)
 	}
 
 	// Handle things internally after triggering request.
@@ -297,12 +297,12 @@ func (v *VertexCore) internalOnRecv(
 	f func(e Edge, m Message, ts timestamp.Timestamp) error,
 	dir constants.VertexInDir,
 ) {
-	v.FuncOnRecvs[dir] = f
+	v.funcOnRecvs[dir] = f
 }
 
 func (v *VertexCore) internalOnNotify(
 	f func(ts timestamp.Timestamp) error,
 	dir constants.VertexInDir,
 ) {
-	v.FuncOnNotifies[dir] = f
+	v.funcOnNotifies[dir] = f
 }

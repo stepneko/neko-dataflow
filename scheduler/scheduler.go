@@ -191,7 +191,7 @@ func (s *SimpleScheduler) DecreOC(req *vertex.Request) error {
 	}
 	node, exist := s.graph.VertexMap[e.GetTarget()]
 	if !exist {
-		return errors.New(fmt.Sprintf("vertex not found when doing DecreOC with id: %d", e.GetTarget()))
+		return fmt.Errorf("vertex not found when doing DecreOC with id: %d", e.GetTarget())
 	}
 	s.graph.DecreOC(ps)
 	node.vertex.GetInAckChan() <- vertex.Request{
@@ -209,7 +209,7 @@ func (s *SimpleScheduler) SendBy(req *vertex.Request) error {
 	target := e.GetTarget()
 	node, exist := s.graph.VertexMap[target]
 	if !exist {
-		return errors.New(fmt.Sprintf("vertex not found in graph when doing SendBy with id: %d", target))
+		return fmt.Errorf("vertex not found in graph when doing SendBy with id: %d", target)
 	}
 	dir, err := s.graph.GetDir(src, target)
 	if err != nil {
@@ -233,7 +233,7 @@ func (s *SimpleScheduler) NotifyAt(req *vertex.Request) error {
 	target := e.GetTarget()
 	node, exist := s.graph.VertexMap[target]
 	if !exist {
-		return errors.New(fmt.Sprintf("vertex not found with doing NotifyAt with id: %d", target))
+		return fmt.Errorf("vertex not found with doing NotifyAt with id: %d", target)
 	}
 	ch := node.vertex.GetInTaskChans()[constants.VertexInDir_Default]
 	if ch == nil {
