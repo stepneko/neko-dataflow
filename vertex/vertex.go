@@ -32,18 +32,18 @@ type Vertex interface {
 	SetInAckChan(ch chan Request)
 	// GetInAckChan gets the chan handle receiving acks from scheduler.
 	GetInAckChan() chan Request
+	// Start starts a runtime for the vertex to handle dataflow.
+	Start(wg sync.WaitGroup) error
 	// Handle triggers the processing of request.
 	Handle(req *Request, dir constants.VertexInDir) error
 	// SendBy is a wrapper that triggers the RequestType_SendBy function
 	SendBy(e Edge, m Message, ts timestamp.Timestamp) error
 	// NotifyAt is a wrapper that triggers the RequestType_NotifyAt function
 	NotifyAt(ts timestamp.Timestamp) error
-	// OnRecv registers RequestType_OnRecv function
-	OnRecv(f func(e Edge, m Message, ts timestamp.Timestamp) error, dir constants.VertexInDir)
-	// OnNotify registers RequestType_OnNotify function
-	OnNotify(f func(ts timestamp.Timestamp) error, dir constants.VertexInDir)
-	// Start starts a runtime for the vertex to handle dataflow.
-	Start(wg sync.WaitGroup) error
+	// internalOnRecv registers RequestType_OnRecv function
+	internalOnRecv(f func(e Edge, m Message, ts timestamp.Timestamp) error, dir constants.VertexInDir)
+	// internalOnNotify registers RequestType_OnNotify function
+	internalOnNotify(f func(ts timestamp.Timestamp) error, dir constants.VertexInDir)
 }
 
 type VertexCore struct {
@@ -293,14 +293,14 @@ func (v *VertexCore) NotifyAt(ts timestamp.Timestamp) error {
 	return nil
 }
 
-func (v *VertexCore) OnRecv(
+func (v *VertexCore) internalOnRecv(
 	f func(e Edge, m Message, ts timestamp.Timestamp) error,
 	dir constants.VertexInDir,
 ) {
 	v.FuncOnRecvs[dir] = f
 }
 
-func (v *VertexCore) OnNotify(
+func (v *VertexCore) internalOnNotify(
 	f func(ts timestamp.Timestamp) error,
 	dir constants.VertexInDir,
 ) {

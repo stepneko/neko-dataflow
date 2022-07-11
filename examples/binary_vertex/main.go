@@ -7,8 +7,8 @@ import (
 	"github.com/stepneko/neko-dataflow/constants"
 	"github.com/stepneko/neko-dataflow/scheduler"
 	"github.com/stepneko/neko-dataflow/timestamp"
+	"github.com/stepneko/neko-dataflow/utils"
 	"github.com/stepneko/neko-dataflow/vertex"
-	"go.uber.org/zap"
 )
 
 func main() {
@@ -25,13 +25,13 @@ func main() {
 
 	e1, err := s.BuildEdge(input1, v, constants.VertexInDir_Left)
 	if err != nil {
-		zap.L().Error(err.Error())
+		utils.Logger().Error(err.Error())
 		return
 	}
 
 	e2, err := s.BuildEdge(input2, v, constants.VertexInDir_Right)
 	if err != nil {
-		zap.L().Error(err.Error())
+		utils.Logger().Error(err.Error())
 		return
 	}
 
@@ -39,20 +39,20 @@ func main() {
 		println("input1 on recv: " + m.ToString())
 		input1.SendBy(e1, m, ts)
 		return nil
-	}, constants.VertexInDir_Default)
+	})
 	input2.OnRecv(func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
 		println("input2 on recv: " + m.ToString())
 		input2.SendBy(e2, m, ts)
 		return nil
-	}, constants.VertexInDir_Default)
-	v.OnRecv(func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
+	})
+	v.OnRecvLeft(func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
 		println("v on recv from left: " + m.ToString())
 		return nil
-	}, constants.VertexInDir_Left)
-	v.OnRecv(func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
+	})
+	v.OnRecvRight(func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
 		println("v on recv from right: " + m.ToString())
 		return nil
-	}, constants.VertexInDir_Right)
+	})
 
 	go s.Run()
 

@@ -8,8 +8,8 @@ import (
 
 	"github.com/stepneko/neko-dataflow/constants"
 	"github.com/stepneko/neko-dataflow/timestamp"
+	"github.com/stepneko/neko-dataflow/utils"
 	"github.com/stepneko/neko-dataflow/vertex"
-	"go.uber.org/zap"
 )
 
 type Scheduler interface {
@@ -124,7 +124,7 @@ func (s *SimpleScheduler) Serve() {
 			return
 		case req := <-s.ch:
 			if err := s.HandleReq(&req); err != nil {
-				zap.L().Error(err.Error())
+				utils.Logger().Error(err.Error())
 			}
 		}
 	}

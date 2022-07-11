@@ -6,12 +6,12 @@ import (
 )
 
 type InputVertex struct {
-	VertexCore
+	UnaryVertex
 }
 
 func NewInputVertex() *InputVertex {
 	vertex := InputVertex{
-		*NewVertexCore(),
+		*NewUnaryVertex(),
 	}
 	vertex.typ = constants.VertexType_Input
 	return &vertex

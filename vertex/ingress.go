@@ -5,12 +5,12 @@ import (
 )
 
 type IngressVertex struct {
-	VertexCore
+	UnaryVertex
 }
 
 func NewIngressVertex() *IngressVertex {
 	vertex := IngressVertex{
-		*NewVertexCore(),
+		*NewUnaryVertex(),
 	}
 	vertex.typ = constants.VertexType_Ingress
 	return &vertex
