@@ -64,7 +64,7 @@ func TestInsertVertex(t *testing.T) {
 
 func TestInsertEdge(t *testing.T) {
 	g := NewGraph()
-	v1 := vertex.NewGenericVertex()
+	v1 := vertex.NewUnaryVertex()
 	v1.SetId(1)
 	g.InsertVertex(v1)
 	v2 := vertex.NewIngressVertex()
