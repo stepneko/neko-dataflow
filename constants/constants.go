@@ -1,5 +1,7 @@
 package constants
 
+const ChanCacapity int = 1024
+
 type VertexId int
 
 type VertexType int

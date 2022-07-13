@@ -35,7 +35,7 @@ func NewScheduler() *SimpleScheduler {
 		ctx:        ctx,
 		cancelFunc: cancelFunc,
 		nextId:     0,
-		ch:         make(chan vertex.Request, 1024),
+		ch:         make(chan vertex.Request, constants.ChanCacapity),
 		graph:      NewGraph(),
 	}
 }
@@ -59,15 +59,15 @@ func (s *SimpleScheduler) RegisterVertex(v vertex.Vertex) {
 
 	// Set up vertex status in scheduler and channels in vertex
 	taskChans := [constants.VertexInDirs]chan vertex.Request{}
-	taskChans[constants.VertexInDir_Left] = make(chan vertex.Request, 1024)
+	taskChans[constants.VertexInDir_Left] = make(chan vertex.Request, constants.ChanCacapity)
 	// If the vertex is a binary vertex, it has a taskChan2.
 	if v.GetType() == constants.VertexType_Bianry {
-		taskChans[constants.VertexInDir_Right] = make(chan vertex.Request, 1024)
+		taskChans[constants.VertexInDir_Right] = make(chan vertex.Request, constants.ChanCacapity)
 	}
 	v.SetInTaskChans(taskChans)
 
 	// Set up ack channel from scheduler to vertex
-	ackChan := make(chan vertex.Request, 1024)
+	ackChan := make(chan vertex.Request, constants.ChanCacapity)
 	v.SetInAckChan(ackChan)
 
 	// Insert the vertex into scheduler
