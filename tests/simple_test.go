@@ -14,12 +14,12 @@ import (
 )
 
 func TestSimpleCase(t *testing.T) {
-	chRecvInput := make(chan vertex.Message, 1024)
-	chRecvV1 := make(chan vertex.Message, 1024)
-	chRecvV2 := make(chan vertex.Message, 1024)
-	chNotifyInput := make(chan vertex.Message, 1024)
-	chNotifyV1 := make(chan vertex.Message, 1024)
-	chNotifyV2 := make(chan vertex.Message, 1024)
+	chRecvInput := make(chan vertex.Message, constants.ChanCacapity)
+	chRecvV1 := make(chan vertex.Message, constants.ChanCacapity)
+	chRecvV2 := make(chan vertex.Message, constants.ChanCacapity)
+	chNotifyInput := make(chan vertex.Message, constants.ChanCacapity)
+	chNotifyV1 := make(chan vertex.Message, constants.ChanCacapity)
+	chNotifyV2 := make(chan vertex.Message, constants.ChanCacapity)
 
 	s := scheduler.NewScheduler()
 
