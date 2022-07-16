@@ -1,23 +1,25 @@
-package scheduler
+package graph
 
 import (
 	"errors"
 	"fmt"
 
 	"github.com/stepneko/neko-dataflow/constants"
+	"github.com/stepneko/neko-dataflow/edge"
 	"github.com/stepneko/neko-dataflow/timestamp"
-	"github.com/stepneko/neko-dataflow/vertex"
 )
 
 type Node struct {
-	vertex   vertex.Vertex
-	children map[*Node]bool
+	Vid      constants.VertexId
+	Typ      constants.VertexType
+	Children map[*Node]bool
 }
 
-func NewNode(v vertex.Vertex) *Node {
+func NewNode(vid constants.VertexId, typ constants.VertexType) *Node {
 	return &Node{
-		vertex:   v,
-		children: make(map[*Node]bool),
+		Vid:      vid,
+		Typ:      typ,
+		Children: make(map[*Node]bool),
 	}
 }
 
@@ -43,16 +45,15 @@ func NewGraph() *Graph {
 	}
 }
 
-func (g *Graph) InsertVertex(v vertex.Vertex) {
-	id := v.GetId()
-	_, exist := g.VertexMap[id]
+func (g *Graph) InsertVertex(vid constants.VertexId, typ constants.VertexType) {
+	_, exist := g.VertexMap[vid]
 	if !exist {
-		node := NewNode(v)
-		g.VertexMap[id] = node
+		node := NewNode(vid, typ)
+		g.VertexMap[vid] = node
 	}
 }
 
-func (g *Graph) InsertEdge(e vertex.Edge, dir constants.VertexInDir) error {
+func (g *Graph) InsertEdge(e edge.Edge) error {
 	src := e.GetSrc()
 	srcNode, exist := g.VertexMap[src]
 	if !exist {
@@ -65,13 +66,7 @@ func (g *Graph) InsertEdge(e vertex.Edge, dir constants.VertexInDir) error {
 		return errors.New(fmt.Sprintf("target vertex not registered with id: %d", target))
 	}
 
-	srcNode.children[targetNode] = true
-
-	// Mark the edge is pointing to left or right of the target vertex
-	if _, exist := g.DirsMap[src]; !exist {
-		g.DirsMap[src] = make(map[constants.VertexId]constants.VertexInDir)
-	}
-	g.DirsMap[src][target] = dir
+	srcNode.Children[targetNode] = true
 
 	return nil
 }
@@ -163,11 +158,10 @@ func (g *Graph) CouldResultIn(a Pointstamp, b Pointstamp) (bool, error) {
 	if !exist {
 		return false, errors.New(fmt.Sprintf("src not registered with id: %d", srcId))
 	}
-	srcVertex := srcNode.vertex
 	// The srcTs is the timestamp getting out of the a edge.
 	// Therefore it has to be processed by target vertex of that edge.
 	srcTs := timestamp.CopyTimestampFrom(a.GetTimestamp())
-	timestamp.HandleTimestamp(srcVertex.GetType(), srcTs)
+	timestamp.HandleTimestamp(srcNode.Typ, srcTs)
 	targetId := b.GetSrc()
 	_, exist = g.VertexMap[targetId]
 	if !exist {
@@ -202,12 +196,11 @@ func (g *Graph) CouldResultIn(a Pointstamp, b Pointstamp) (bool, error) {
 		visited[currId] = currTs
 
 		// Now go to node to traverse graph
-		for childNode := range currNode.children {
-			childVertex := childNode.vertex
+		for childNode := range currNode.Children {
 			// Handle timestamp according to the child vertex
 			newTs := timestamp.CopyTimestampFrom(currTs)
-			timestamp.HandleTimestamp(childVertex.GetType(), newTs)
-			newPs := NewVertexPointStamp(childVertex.GetId(), newTs)
+			timestamp.HandleTimestamp(childNode.Typ, newTs)
+			newPs := NewVertexPointStamp(childNode.Vid, newTs)
 			queue = append(queue, newPs)
 		}
 	}
@@ -230,8 +223,8 @@ func (g *Graph) PreProcess() {
 	// allowing all events downstream of the input to eventually
 	// drain from the computation.
 	for vertexId := range g.VertexMap {
-		v := g.VertexMap[vertexId].vertex
-		if v.GetType() == constants.VertexType_Input {
+		vNode := g.VertexMap[vertexId]
+		if vNode.Typ == constants.VertexType_Input {
 			ts := timestamp.NewTimestamp()
 			ps := NewVertexPointStamp(vertexId, ts)
 			g.ActivePsMap[ps.Hash()] = &PointstampCounter{

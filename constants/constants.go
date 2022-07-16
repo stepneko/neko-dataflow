@@ -4,16 +4,17 @@ const ChanCacapity int = 1024
 
 type VertexId int
 
+const VertexId_Nil = 0
+
 type VertexType int
 
 const (
-	VertexType_Generic  VertexType = 1
+	VertexType_Input    VertexType = 1
 	VertexType_Ingress  VertexType = 2
 	VertexType_Egress   VertexType = 3
 	VertexType_Feedback VertexType = 4
-	VertexType_Input    VertexType = 5
-	VertexType_Unary    VertexType = 6
-	VertexType_Bianry   VertexType = 7
+	VertexType_Inspect  VertexType = 5
+	VertexType_Bianry   VertexType = 6
 )
 
 const VertexInDirs int = 2
@@ -38,3 +39,12 @@ const (
 	RequestType_DecreOC RequestType = 5 //  Function signature to decrement occurrence count
 	RequestType_Ack     RequestType = 6 //  Function signature to ack
 )
+
+type BinaryType int
+
+const (
+	BinaryType_Left  BinaryType = 0
+	BinaryType_Right BinaryType = 1
+)
+
+type WorkerId int
