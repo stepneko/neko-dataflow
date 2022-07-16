@@ -1,94 +1,47 @@
 package main
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
-	"github.com/stepneko/neko-dataflow/constants"
-	"github.com/stepneko/neko-dataflow/scheduler"
+	"github.com/stepneko/neko-dataflow/edge"
+	"github.com/stepneko/neko-dataflow/operators"
+	"github.com/stepneko/neko-dataflow/request"
+	"github.com/stepneko/neko-dataflow/scope"
+	"github.com/stepneko/neko-dataflow/step"
 	"github.com/stepneko/neko-dataflow/timestamp"
-	"github.com/stepneko/neko-dataflow/utils"
-	"github.com/stepneko/neko-dataflow/vertex"
+	"github.com/stepneko/neko-dataflow/worker"
 )
 
-// Build a simple scheduler with a simple input vertex.
-// Basic communication between scheduler and veretx,
-// and how data is being processed.
 func main() {
-	// Initialize the scheduler.
-	s := scheduler.NewScheduler()
 
-	// Set up vertices and edges.
-	// Create input vertex.
-	input := vertex.NewInputVertex()
-	// Register it to the scheduler.
-	s.RegisterVertex(input)
+	ch := make(chan request.InputRaw, 1024)
 
-	// Create a generic vertex to connect with input.
-	v1 := vertex.NewUnaryVertex()
-	// Register it to the scheduler.
-	s.RegisterVertex(v1)
-
-	// Create an edge between them.
-	e1, err := s.BuildEdge(input, v1, constants.VertexInDir_Default)
-	if err != nil {
-		utils.Logger().Error(err.Error())
-		return
+	f := func(w worker.Worker) error {
+		w.Dataflow(func(s scope.Scope) error {
+			operators.
+				NewInput(s, ch).
+				Inspect(func(e edge.Edge, msg request.Message, ts timestamp.Timestamp) (request.Message, error) {
+					println(fmt.Sprintf("inspect operator 1 received message: %s", msg.ToString()))
+					return *request.NewMessage([]byte(msg.ToString())), nil
+				}).
+				Inspect(func(e edge.Edge, msg request.Message, ts timestamp.Timestamp) (request.Message, error) {
+					println(fmt.Sprintf("inspect operator 2 received message: %s", msg.ToString()))
+					return *request.NewMessage([]byte(msg.ToString())), nil
+				})
+			return nil
+		})
+		return nil
 	}
+	go step.Start(f)
 
-	// Create another generic vertex to connect with v1.
-	v2 := vertex.NewUnaryVertex()
-	// Register it to the scheduler
-	s.RegisterVertex(v2)
-
-	e2, err := s.BuildEdge(v1, v2, constants.VertexInDir_Default)
-	if err != nil {
-		utils.Logger().Error(err.Error())
-		return
-	}
-
-	// Define behaviors of input vertex.
-	input.OnRecv(func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
-		println("input on recv: " + m.ToString())
-		input.SendBy(e1, m, ts)
-		return nil
-	})
-	input.OnNotify(func(ts timestamp.Timestamp) error {
-		println("input on notify")
-		return nil
-	})
-
-	v1.OnRecv(func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
-		println("v1 on recv: " + m.ToString())
-		v1.SendBy(e2, m, ts)
-		return nil
-	})
-	v1.OnNotify(func(ts timestamp.Timestamp) error {
-		println("v1 on notify")
-		return nil
-	})
-	v2.OnRecv(func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
-		println("v2 on recv: " + m.ToString())
-		return nil
-	})
-	v2.OnNotify(func(ts timestamp.Timestamp) error {
-		println("v2 on notify")
-		return nil
-	})
-
-	// Start the scheduler
-	go s.Run()
-
-	println("starting here")
-
-	// Start streaming data into the system
-	ts := timestamp.NewTimestamp()
 	for i := 0; i < 5; i++ {
-		m := vertex.NewMessage([]byte(strconv.Itoa(i)))
-		input.Send(*ts, *m)
+		ch <- request.InputRaw{
+			Msg: *request.NewMessage([]byte(strconv.Itoa(i))),
+			Ts:  *timestamp.NewTimestamp(),
+		}
 	}
-	input.Notify(*ts)
-	v1.NotifyAt(*ts)
-	v2.NotifyAt(*ts)
+
 	time.Sleep(time.Hour)
 }

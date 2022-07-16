@@ -24,6 +24,7 @@ type InspectHandleCore struct {
 
 type InspectOp interface {
 	scope.Scope
+	Operator
 	GenericUnaryOp
 }
 

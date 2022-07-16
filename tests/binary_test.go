@@ -1,90 +1,90 @@
 package tests
 
 import (
+	"fmt"
 	"strconv"
 	"testing"
 
-	"github.com/stepneko/neko-dataflow/constants"
-	"github.com/stepneko/neko-dataflow/scheduler"
+	"github.com/stepneko/neko-dataflow/edge"
+	"github.com/stepneko/neko-dataflow/operators"
+	"github.com/stepneko/neko-dataflow/request"
+	"github.com/stepneko/neko-dataflow/scope"
+	"github.com/stepneko/neko-dataflow/step"
 	"github.com/stepneko/neko-dataflow/timestamp"
-	"github.com/stepneko/neko-dataflow/utils"
-	"github.com/stepneko/neko-dataflow/vertex"
+	"github.com/stepneko/neko-dataflow/worker"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestBinaryCase(t *testing.T) {
-	chRecvInput1 := make(chan vertex.Message, 1024)
-	chRecvInput2 := make(chan vertex.Message, 1024)
-	chRecvVLeft := make(chan vertex.Message, 1024)
-	chRecvVRight := make(chan vertex.Message, 1024)
 
-	s := scheduler.NewScheduler()
+	ch1 := make(chan request.InputRaw, 1024)
+	ch2 := make(chan request.InputRaw, 1024)
 
-	input1 := vertex.NewInputVertex()
-	s.RegisterVertex(input1)
+	binaryCh1 := make(chan string, 1024)
+	binaryCh2 := make(chan string, 1024)
 
-	input2 := vertex.NewInputVertex()
-	s.RegisterVertex(input2)
+	inspectCh1 := make(chan string, 1024)
+	inspectCh2 := make(chan string, 1024)
 
-	v := vertex.NewBinaryVertex()
-	s.RegisterVertex(v)
+	f := func(w worker.Worker) error {
+		w.Dataflow(func(s scope.Scope) error {
+			input1 := operators.NewInput(s, ch1)
+			input2 := operators.NewInput(s, ch2)
 
-	e1, err := s.BuildEdge(input1, v, constants.VertexInDir_Left)
-	if err != nil {
-		utils.Logger().Error(err.Error())
-		return
-	}
+			input1.
+				Binary(
+					input2,
+					func(e edge.Edge, msg request.Message, ts timestamp.Timestamp) (request.Message, error) {
+						binaryCh1 <- fmt.Sprintf("binary operator received message from input 1: %s", msg.ToString())
+						return msg, nil
+					},
+					func(e edge.Edge, msg request.Message, ts timestamp.Timestamp) (request.Message, error) {
+						binaryCh2 <- fmt.Sprintf("binary operator received message from input 2: %s", msg.ToString())
+						return msg, nil
+					},
+				).
+				Inspect(
+					func(e edge.Edge, msg request.Message, ts timestamp.Timestamp) (request.Message, error) {
+						str := msg.ToString()
+						val, err := strconv.Atoi(str)
+						if err != nil {
+							return *request.NewMessage([]byte{}), err
+						}
+						if val < 10 {
+							inspectCh1 <- fmt.Sprintf("inspect operator received message: %s", str)
+						} else {
+							inspectCh2 <- fmt.Sprintf("inspect operator received message: %s", str)
+						}
 
-	e2, err := s.BuildEdge(input2, v, constants.VertexInDir_Right)
-	if err != nil {
-		utils.Logger().Error(err.Error())
-		return
-	}
-
-	input1.OnRecv(func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
-		chRecvInput1 <- m
-		input1.SendBy(e1, m, ts)
+						return msg, nil
+					},
+				)
+			return nil
+		})
 		return nil
-	})
-	input2.OnRecv(func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
-		chRecvInput2 <- m
-		input2.SendBy(e2, m, ts)
-		return nil
-	})
-	v.OnRecvLeft(func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
-		chRecvVLeft <- m
-		return nil
-	})
-	v.OnRecvRight(func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
-		chRecvVRight <- m
-		return nil
-	})
-
-	go s.Run()
-
-	ts := timestamp.NewTimestamp()
-	for i := 0; i < 5; i++ {
-		m := vertex.NewMessage([]byte(strconv.Itoa(i)))
-		input1.Send(*ts, *m)
 	}
-
-	for i := 10; i < 15; i++ {
-		m := vertex.NewMessage([]byte(strconv.Itoa(i)))
-		input2.Send(*ts, *m)
-	}
+	go step.Start(f)
 
 	for i := 0; i < 5; i++ {
-		mRecvInput1 := <-chRecvInput1
-		assert.Equal(t, mRecvInput1.ToString(), strconv.Itoa(i))
-		mRecvVLeft := <-chRecvVLeft
-		assert.Equal(t, mRecvVLeft.ToString(), strconv.Itoa(i))
-
+		ch1 <- request.InputRaw{
+			Msg: *request.NewMessage([]byte(strconv.Itoa(i))),
+			Ts:  *timestamp.NewTimestamp(),
+		}
+		ch2 <- request.InputRaw{
+			Msg: *request.NewMessage([]byte(strconv.Itoa(i + 10))),
+			Ts:  *timestamp.NewTimestamp(),
+		}
 	}
 
-	for i := 10; i < 15; i++ {
-		mRecvInput2 := <-chRecvInput2
-		assert.Equal(t, mRecvInput2.ToString(), strconv.Itoa(i))
-		mRecvVRight := <-chRecvVRight
-		assert.Equal(t, mRecvVRight.ToString(), strconv.Itoa(i))
+	for i := 0; i < 5; i++ {
+		binaryS1 := <-binaryCh1
+		assert.Equal(t, binaryS1, fmt.Sprintf("binary operator received message from input 1: %d", i))
+		binaryS2 := <-binaryCh2
+		assert.Equal(t, binaryS2, fmt.Sprintf("binary operator received message from input 2: %d", i+10))
+		inspectS1 := <-inspectCh1
+		assert.Equal(t, inspectS1, fmt.Sprintf("inspect operator received message: %d", i))
+		inspectS2 := <-inspectCh2
+		assert.Equal(t, inspectS2, fmt.Sprintf("inspect operator received message: %d", i+10))
 	}
+
 }

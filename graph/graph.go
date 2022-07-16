@@ -57,13 +57,13 @@ func (g *Graph) InsertEdge(e edge.Edge) error {
 	src := e.GetSrc()
 	srcNode, exist := g.VertexMap[src]
 	if !exist {
-		return errors.New(fmt.Sprintf("src vertex not registered with id: %d", src))
+		return fmt.Errorf("src vertex not registered with id: %d", src)
 	}
 
 	target := e.GetTarget()
 	targetNode, exist := g.VertexMap[target]
 	if !exist {
-		return errors.New(fmt.Sprintf("target vertex not registered with id: %d", target))
+		return fmt.Errorf("target vertex not registered with id: %d", target)
 	}
 
 	srcNode.Children[targetNode] = true
@@ -156,7 +156,7 @@ func (g *Graph) CouldResultIn(a Pointstamp, b Pointstamp) (bool, error) {
 	srcId := a.GetTarget()
 	srcNode, exist := g.VertexMap[srcId]
 	if !exist {
-		return false, errors.New(fmt.Sprintf("src not registered with id: %d", srcId))
+		return false, fmt.Errorf(fmt.Sprintf("src not registered with id: %d", srcId))
 	}
 	// The srcTs is the timestamp getting out of the a edge.
 	// Therefore it has to be processed by target vertex of that edge.
@@ -165,7 +165,7 @@ func (g *Graph) CouldResultIn(a Pointstamp, b Pointstamp) (bool, error) {
 	targetId := b.GetSrc()
 	_, exist = g.VertexMap[targetId]
 	if !exist {
-		return false, errors.New(fmt.Sprintf("target not registered with id: %d", targetId))
+		return false, fmt.Errorf(fmt.Sprintf("target not registered with id: %d", targetId))
 	}
 	targetTs := b.GetTimestamp()
 	queue := []*VertexPointStamp{NewVertexPointStamp(srcId, srcTs)}
@@ -178,7 +178,7 @@ func (g *Graph) CouldResultIn(a Pointstamp, b Pointstamp) (bool, error) {
 		currId := currPs.GetSrc()
 		currNode, exist := g.VertexMap[currId]
 		if !exist {
-			return false, errors.New(fmt.Sprintf("vertex not registered with id: %d", currId))
+			return false, fmt.Errorf("vertex not registered with id: %d", currId)
 		}
 		currTs := currPs.GetTimestamp()
 

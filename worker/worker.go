@@ -44,6 +44,7 @@ func NewSimpleWorker(ctx context.Context) *SimpleWorker {
 		graph:      graph.NewGraph(),
 		handle:     handles.NewSimpleWorkerHandle(),
 		vHandles:   make(map[constants.VertexId]map[constants.VertexId]handles.VertexHandle),
+		vertices:   make(map[constants.VertexId]vertex.Vertex),
 	}
 }
 
@@ -76,7 +77,9 @@ func (w *SimpleWorker) Run() error {
 		go v.Start(wg)
 	}
 
-	go w.serve()
+	wg.Add(1)
+	go w.serve(wg)
+
 	wg.Wait()
 
 	return nil
@@ -183,12 +186,14 @@ func (w *SimpleWorker) handleReq(req *request.Request) error {
 	return nil
 }
 
-func (w *SimpleWorker) serve() error {
+func (w *SimpleWorker) serve(wg sync.WaitGroup) error {
+	defer wg.Done()
+	ch := w.handle.Recv()
 	for {
 		select {
 		case <-w.ctx.Done():
 			return nil
-		case req := <-w.handle.Recv():
+		case req := <-ch:
 			if err := w.handleReq(&req); err != nil {
 				return err
 			}

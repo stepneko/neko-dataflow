@@ -7,7 +7,7 @@ import (
 
 type WorkerHandle interface {
 	Send(*request.Request) error
-	Recv() <-chan request.Request
+	Recv() chan request.Request
 }
 
 type SimpleWorkerHandle struct {
@@ -25,6 +25,6 @@ func (t *SimpleWorkerHandle) Send(req *request.Request) error {
 	return nil
 }
 
-func (t *SimpleWorkerHandle) Recv() <-chan request.Request {
+func (t *SimpleWorkerHandle) Recv() chan request.Request {
 	return t.ch
 }

@@ -22,6 +22,7 @@ type InputHandleCore struct {
 
 type InputOp interface {
 	scope.Scope
+	Operator
 	GenericUnaryOp
 }
 

@@ -1,102 +1,58 @@
 package tests
 
 import (
+	"fmt"
 	"strconv"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
-	"github.com/stepneko/neko-dataflow/constants"
-	"github.com/stepneko/neko-dataflow/scheduler"
+	"github.com/stepneko/neko-dataflow/edge"
+	"github.com/stepneko/neko-dataflow/operators"
+	"github.com/stepneko/neko-dataflow/request"
+	"github.com/stepneko/neko-dataflow/scope"
+	"github.com/stepneko/neko-dataflow/step"
 	"github.com/stepneko/neko-dataflow/timestamp"
-	"github.com/stepneko/neko-dataflow/utils"
-	"github.com/stepneko/neko-dataflow/vertex"
+	"github.com/stepneko/neko-dataflow/worker"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSimpleCase(t *testing.T) {
-	chRecvInput := make(chan vertex.Message, constants.ChanCacapity)
-	chRecvV1 := make(chan vertex.Message, constants.ChanCacapity)
-	chRecvV2 := make(chan vertex.Message, constants.ChanCacapity)
-	chNotifyInput := make(chan vertex.Message, constants.ChanCacapity)
-	chNotifyV1 := make(chan vertex.Message, constants.ChanCacapity)
-	chNotifyV2 := make(chan vertex.Message, constants.ChanCacapity)
 
-	s := scheduler.NewScheduler()
+	ch := make(chan request.InputRaw, 1024)
+	inspectCh1 := make(chan string, 1024)
+	inspectCh2 := make(chan string, 1024)
 
-	input := vertex.NewInputVertex()
-	s.RegisterVertex(input)
+	f := func(w worker.Worker) error {
+		w.Dataflow(func(s scope.Scope) error {
+			operators.
+				NewInput(s, ch).
+				Inspect(func(e edge.Edge, msg request.Message, ts timestamp.Timestamp) (request.Message, error) {
+					inspectCh1 <- fmt.Sprintf("inspect operator 1 received message: %s", msg.ToString())
+					return *request.NewMessage([]byte(msg.ToString())), nil
+				}).
+				Inspect(func(e edge.Edge, msg request.Message, ts timestamp.Timestamp) (request.Message, error) {
+					inspectCh2 <- fmt.Sprintf("inspect operator 2 received message: %s", msg.ToString())
+					return *request.NewMessage([]byte(msg.ToString())), nil
+				})
 
-	v1 := vertex.NewUnaryVertex()
-	s.RegisterVertex(v1)
-
-	e1, err := s.BuildEdge(input, v1, constants.VertexInDir_Default)
-	if err != nil {
-		utils.Logger().Error(err.Error())
-		return
+			return nil
+		})
+		return nil
 	}
 
-	v2 := vertex.NewUnaryVertex()
-	s.RegisterVertex(v2)
-
-	e2, err := s.BuildEdge(v1, v2, constants.VertexInDir_Default)
-	if err != nil {
-		utils.Logger().Error(err.Error())
-		return
-	}
-
-	input.OnRecv(func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
-		chRecvInput <- m
-		input.SendBy(e1, m, ts)
-		return nil
-	})
-	input.OnNotify(func(ts timestamp.Timestamp) error {
-		chNotifyInput <- *vertex.NewMessage([]byte("input notified"))
-		return nil
-	})
-
-	v1.OnRecv(func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
-		chRecvV1 <- m
-		v1.SendBy(e2, m, ts)
-		return nil
-	})
-	v1.OnNotify(func(ts timestamp.Timestamp) error {
-		chNotifyV1 <- *vertex.NewMessage([]byte("v1 notified"))
-		return nil
-	})
-
-	v2.OnRecv(func(e vertex.Edge, m vertex.Message, ts timestamp.Timestamp) error {
-		chRecvV2 <- m
-		return nil
-	})
-	v2.OnNotify(func(ts timestamp.Timestamp) error {
-		chNotifyV2 <- *vertex.NewMessage([]byte("v2 notified"))
-		return nil
-	})
-
-	go s.Run()
-
-	ts := timestamp.NewTimestamp()
-	for i := 0; i < 5; i++ {
-		m := vertex.NewMessage([]byte(strconv.Itoa(i)))
-		input.Send(*ts, *m)
-	}
-	input.Notify(*ts)
-	v1.NotifyAt(*ts)
-	v2.NotifyAt(*ts)
+	go step.Start(f)
 
 	for i := 0; i < 5; i++ {
-		mRecvInput := <-chRecvInput
-		assert.Equal(t, mRecvInput.ToString(), strconv.Itoa(i))
-		mRecvV1 := <-chRecvV1
-		assert.Equal(t, mRecvV1.ToString(), strconv.Itoa(i))
-		mRecvV2 := <-chRecvV2
-		assert.Equal(t, mRecvV2.ToString(), strconv.Itoa(i))
+		ch <- request.InputRaw{
+			Msg: *request.NewMessage([]byte(strconv.Itoa(i))),
+			Ts:  *timestamp.NewTimestamp(),
+		}
 	}
 
-	mNotifyInput := <-chNotifyInput
-	assert.Equal(t, mNotifyInput.ToString(), "input notified")
-	mNotifyV1 := <-chNotifyV1
-	assert.Equal(t, mNotifyV1.ToString(), "v1 notified")
-	mNotifyV2 := <-chNotifyV2
-	assert.Equal(t, mNotifyV2.ToString(), "v2 notified")
+	for i := 0; i < 5; i++ {
+		s1 := <-inspectCh1
+		assert.Equal(t, s1, fmt.Sprintf("inspect operator 1 received message: %d", i))
+		s2 := <-inspectCh2
+		assert.Equal(t, s2, fmt.Sprintf("inspect operator 2 received message: %d", i))
+	}
+
 }

@@ -24,6 +24,7 @@ type BinaryHandleCore struct {
 
 type BinaryOp interface {
 	scope.Scope
+	Operator
 	GenericBinaryOp
 }
 
@@ -103,7 +104,14 @@ func (op *BinaryOpCore) OnRecv1(e edge.Edge, msg request.Message, ts timestamp.T
 }
 
 func (op *BinaryOpCore) OnRecv2(e edge.Edge, msg request.Message, ts timestamp.Timestamp) error {
-	if err := op.coreDecreOC(e, ts, op.handle2); err != nil {
+	// Use handle1 because worker acks back to BinaryOp vertex on IncreOC and DecreOC
+	// using handle1, no matter if the original message comes from OnRecv1() or OnRecv2()
+	// This is because the ack is only for unblocking current computation so just
+	// make OnRecv1() and OnRecv2() share the same ack handle and this is sufficient.
+	//
+	// Actually from the worker side, the worker picks vertex handle by map[src, src] or
+	// map[target, target], rather than map[src, target], therefore only handle1 will be picked.
+	if err := op.coreDecreOC(e, ts, op.handle1); err != nil {
 		return err
 	}
 
