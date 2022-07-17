@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/stepneko/neko-dataflow/edge"
+	"github.com/stepneko/neko-dataflow/iterator"
 	"github.com/stepneko/neko-dataflow/operators"
 	"github.com/stepneko/neko-dataflow/request"
 	"github.com/stepneko/neko-dataflow/scope"
@@ -27,19 +28,19 @@ func main() {
 			input1.
 				Binary(
 					input2,
-					func(e edge.Edge, msg request.Message, ts timestamp.Timestamp) (request.Message, error) {
+					func(e edge.Edge, msg *request.Message, ts timestamp.Timestamp) (iterator.Iterator[*request.Message], error) {
 						println(fmt.Sprintf("binary operator received message from input 1: %s", msg.ToString()))
-						return msg, nil
+						return iterator.IterFromSingleton(msg), nil
 					},
-					func(e edge.Edge, msg request.Message, ts timestamp.Timestamp) (request.Message, error) {
+					func(e edge.Edge, msg *request.Message, ts timestamp.Timestamp) (iterator.Iterator[*request.Message], error) {
 						println(fmt.Sprintf("binary operator received message from input 2: %s", msg.ToString()))
-						return msg, nil
+						return iterator.IterFromSingleton(msg), nil
 					},
 				).
 				Inspect(
-					func(e edge.Edge, msg request.Message, ts timestamp.Timestamp) (request.Message, error) {
+					func(e edge.Edge, msg *request.Message, ts timestamp.Timestamp) (iterator.Iterator[*request.Message], error) {
 						println(fmt.Sprintf("inspect operator received message: %s", msg.ToString()))
-						return msg, nil
+						return iterator.IterFromSingleton(msg), nil
 					},
 				)
 			return nil
@@ -62,5 +63,5 @@ func main() {
 		}
 	}
 
-	time.Sleep(time.Hour)
+	time.Sleep(time.Second * 5)
 }

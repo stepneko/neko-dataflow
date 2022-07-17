@@ -13,30 +13,27 @@ import (
 	"github.com/stepneko/neko-dataflow/utils"
 )
 
-type BinaryHandle interface {
+type IngressHandle interface {
 	handles.VertexHandle
 }
 
-type BinaryHandleCore struct {
+type IngressHandleCore struct {
 	handles.VertexHandle
 }
 
-type BinaryOp interface {
+type IngressOp interface {
 	scope.Scope
 	Operator
 	DoubleInput
 }
 
-type BinaryOpCore struct {
+type IngressOpCore struct {
 	*OpCore
-	handle1 BinaryHandle
-	handle2 BinaryHandle
-
-	f1 DataCallback
-	f2 DataCallback
+	handle1 IngressHandle
+	handle2 IngressHandle
 }
 
-func (op *BinaryOpCore) Start(wg sync.WaitGroup) error {
+func (op *IngressOpCore) Start(wg sync.WaitGroup) error {
 	defer wg.Done()
 	for {
 		select {
@@ -54,7 +51,7 @@ func (op *BinaryOpCore) Start(wg sync.WaitGroup) error {
 	}
 }
 
-func (op *BinaryOpCore) handleReq(req *request.Request, bt constants.BinaryType) error {
+func (op *IngressOpCore) handleReq(req *request.Request, bt constants.BinaryType) error {
 	typ := req.Typ
 	edge := req.Edge
 	msg := req.Msg
@@ -85,41 +82,24 @@ func (op *BinaryOpCore) handleReq(req *request.Request, bt constants.BinaryType)
 	}
 }
 
-func (op *BinaryOpCore) OnRecv1(e edge.Edge, msg *request.Message, ts timestamp.Timestamp) error {
+func (op *IngressOpCore) OnRecv1(e edge.Edge, msg *request.Message, ts timestamp.Timestamp) error {
 	if err := op.coreDecreOC(e, ts, op.handle1); err != nil {
 		return err
 	}
 
-	// Send the result message to next target to continue the dataflow
-	iter, err := op.f1(e, msg, ts)
-	if err != nil {
+	newTs := timestamp.CopyTimestampFrom(&ts)
+	if err := timestamp.HandleTimestamp(constants.VertexType_Ingress, newTs); err != nil {
 		return err
 	}
 
-	if iter == nil {
-		return nil
+	if err := op.SendBy(edge.NewEdge(op.id, op.target), msg, *newTs); err != nil {
+		return err
 	}
-
-	for {
-		flag, err := iter.HasElement()
-		if err != nil {
-			return err
-		}
-		if !flag {
-			return nil
-		}
-		m, err := iter.Iter()
-		if err != nil {
-			return err
-		}
-		if err := op.SendBy(edge.NewEdge(op.id, op.target), m, ts); err != nil {
-			return err
-		}
-	}
+	return nil
 }
 
-func (op *BinaryOpCore) OnRecv2(e edge.Edge, msg *request.Message, ts timestamp.Timestamp) error {
-	// Use handle1 because worker acks back to BinaryOp vertex on IncreOC and DecreOC
+func (op *IngressOpCore) OnRecv2(e edge.Edge, msg *request.Message, ts timestamp.Timestamp) error {
+	// Use handle1 because worker acks back to IngressOpCore vertex on IncreOC and DecreOC
 	// using handle1, no matter if the original message comes from OnRecv1() or OnRecv2()
 	// This is because the ack is only for unblocking current computation so just
 	// make OnRecv1() and OnRecv2() share the same ack handle and this is sufficient.
@@ -130,46 +110,24 @@ func (op *BinaryOpCore) OnRecv2(e edge.Edge, msg *request.Message, ts timestamp.
 		return err
 	}
 
-	// Send the result message to next target to continue the dataflow
-	iter, err := op.f2(e, msg, ts)
-	if err != nil {
+	if err := op.SendBy(edge.NewEdge(op.id, op.target), msg, ts); err != nil {
 		return err
 	}
-
-	if iter == nil {
-		return nil
-	}
-
-	for {
-		flag, err := iter.HasElement()
-		if err != nil {
-			return err
-		}
-		if !flag {
-			return nil
-		}
-		m, err := iter.Iter()
-		if err != nil {
-			return err
-		}
-		if err := op.SendBy(edge.NewEdge(op.id, op.target), m, ts); err != nil {
-			return err
-		}
-	}
-}
-
-func (op *BinaryOpCore) OnNotify1(ts timestamp.Timestamp) error {
 	return nil
 }
 
-func (op *BinaryOpCore) OnNotify2(ts timestamp.Timestamp) error {
+func (op *IngressOpCore) OnNotify1(ts timestamp.Timestamp) error {
 	return nil
 }
 
-func (op *BinaryOpCore) SendBy(e edge.Edge, msg *request.Message, ts timestamp.Timestamp) error {
+func (op *IngressOpCore) OnNotify2(ts timestamp.Timestamp) error {
+	return nil
+}
+
+func (op *IngressOpCore) SendBy(e edge.Edge, msg *request.Message, ts timestamp.Timestamp) error {
 	return op.coreSendBy(e, msg, ts, op.handle1)
 }
 
-func (op *BinaryOpCore) NotifyAt(ts timestamp.Timestamp) error {
+func (op *IngressOpCore) NotifyAt(ts timestamp.Timestamp) error {
 	return nil
 }

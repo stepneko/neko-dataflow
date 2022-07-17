@@ -13,6 +13,7 @@ import (
 	"github.com/stepneko/neko-dataflow/request"
 	"github.com/stepneko/neko-dataflow/scope"
 	"github.com/stepneko/neko-dataflow/timestamp"
+	"github.com/stepneko/neko-dataflow/utils"
 	"github.com/stepneko/neko-dataflow/vertex"
 )
 
@@ -29,7 +30,7 @@ type Worker interface {
 type SimpleWorker struct {
 	ctx        context.Context
 	id         constants.WorkerId
-	vidFactory vertex.IdFactory
+	vidFactory utils.IdFactory
 	graph      *graph.Graph
 	handle     handles.WorkerHandle
 	vHandles   map[constants.VertexId]map[constants.VertexId]handles.VertexHandle
@@ -40,7 +41,7 @@ func NewSimpleWorker(ctx context.Context) *SimpleWorker {
 	return &SimpleWorker{
 		ctx:        ctx,
 		id:         0,
-		vidFactory: vertex.NewSimpleIdFactory(),
+		vidFactory: utils.NewSimpleIdFactory(),
 		graph:      graph.NewGraph(),
 		handle:     handles.NewSimpleWorkerHandle(),
 		vHandles:   make(map[constants.VertexId]map[constants.VertexId]handles.VertexHandle),

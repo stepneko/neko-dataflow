@@ -1,4 +1,4 @@
-package vertex
+package utils
 
 import (
 	"github.com/stepneko/neko-dataflow/constants"

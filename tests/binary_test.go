@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stepneko/neko-dataflow/edge"
+	"github.com/stepneko/neko-dataflow/iterator"
 	"github.com/stepneko/neko-dataflow/operators"
 	"github.com/stepneko/neko-dataflow/request"
 	"github.com/stepneko/neko-dataflow/scope"
@@ -34,21 +35,21 @@ func TestBinaryCase(t *testing.T) {
 			input1.
 				Binary(
 					input2,
-					func(e edge.Edge, msg request.Message, ts timestamp.Timestamp) (request.Message, error) {
+					func(e edge.Edge, msg *request.Message, ts timestamp.Timestamp) (iterator.Iterator[*request.Message], error) {
 						binaryCh1 <- fmt.Sprintf("binary operator received message from input 1: %s", msg.ToString())
-						return msg, nil
+						return iterator.IterFromSingleton(msg), nil
 					},
-					func(e edge.Edge, msg request.Message, ts timestamp.Timestamp) (request.Message, error) {
+					func(e edge.Edge, msg *request.Message, ts timestamp.Timestamp) (iterator.Iterator[*request.Message], error) {
 						binaryCh2 <- fmt.Sprintf("binary operator received message from input 2: %s", msg.ToString())
-						return msg, nil
+						return iterator.IterFromSingleton(msg), nil
 					},
 				).
 				Inspect(
-					func(e edge.Edge, msg request.Message, ts timestamp.Timestamp) (request.Message, error) {
+					func(e edge.Edge, msg *request.Message, ts timestamp.Timestamp) (iterator.Iterator[*request.Message], error) {
 						str := msg.ToString()
 						val, err := strconv.Atoi(str)
 						if err != nil {
-							return *request.NewMessage([]byte{}), err
+							return iterator.IterFromSingleton(request.NewMessage([]byte{})), err
 						}
 						if val < 10 {
 							inspectCh1 <- fmt.Sprintf("inspect operator received message: %s", str)
@@ -56,7 +57,7 @@ func TestBinaryCase(t *testing.T) {
 							inspectCh2 <- fmt.Sprintf("inspect operator received message: %s", str)
 						}
 
-						return msg, nil
+						return iterator.IterFromSingleton(msg), nil
 					},
 				)
 			return nil

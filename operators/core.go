@@ -112,11 +112,112 @@ func (op *OpCore) Binary(other Operator, f1 DataCallback, f2 DataCallback) Binar
 	return v
 }
 
+func (op *OpCore) Filter(f FilterCallback) FilterOp {
+	s := op.AsScope()
+
+	taskCh := make(chan request.Request, constants.ChanCacapity)
+
+	ackCh := make(chan request.Request, constants.ChanCacapity)
+
+	handle := handles.NewLocalVertexHandle(taskCh, ackCh)
+
+	vid := s.GenerateVID()
+
+	v := &FilterOpCore{
+		OpCore: NewOpCore(vid, constants.VertexType_Inspect, s),
+		handle: handle,
+		f:      f,
+	}
+
+	s.RegisterVertex(v, handle)
+	s.RegisterEdge(op, v, handle)
+	op.SetTarget(vid)
+
+	return v
+}
+
+// Loop creates a loop structure in diagram:
+// op --[OnRecv1]--> Ingress(as ups) --> loop struct[func(ups)] --> Egress --[target1]--> Onward...
+//                       ^                                            |
+// 			   [OnRecv2] |                                            |[target2]
+//                       +------------------Feedback------------------+
+func (op *OpCore) Loop(dataF func(ups Operator) Operator, filterF FilterCallback) EgressOp {
+	s := op.AsScope()
+
+	// Create ingress operator
+	ingressTaskCh1 := make(chan request.Request, constants.ChanCacapity)
+	ingressTaskCh2 := make(chan request.Request, constants.ChanCacapity)
+
+	ingressAckCh1 := make(chan request.Request, constants.ChanCacapity)
+	ingressAckCh2 := make(chan request.Request, constants.ChanCacapity)
+
+	ingressHandle1 := handles.NewLocalVertexHandle(ingressTaskCh1, ingressAckCh1)
+	ingressHandle2 := handles.NewLocalVertexHandle(ingressTaskCh2, ingressAckCh2)
+
+	ingressVid := s.GenerateVID()
+
+	ingressOp := &IngressOpCore{
+		OpCore:  NewOpCore(ingressVid, constants.VertexType_Ingress, s),
+		handle1: ingressHandle1,
+		handle2: ingressHandle2,
+	}
+
+	s.RegisterVertex(ingressOp, ingressHandle1)
+	s.RegisterEdge(op, ingressOp, ingressHandle1)
+	op.SetTarget(ingressVid)
+
+	// Make loop struct
+	tailOp := dataF(ingressOp)
+
+	// Create egress operator
+	egressTaskCh := make(chan request.Request, constants.ChanCacapity)
+	egressAckCh := make(chan request.Request, constants.ChanCacapity)
+
+	egressHandle := handles.NewLocalVertexHandle(egressTaskCh, egressAckCh)
+
+	egressVid := s.GenerateVID()
+
+	egressOp := &EgressOpCore{
+		OpCore:  NewOpCore(egressVid, constants.VertexType_Egress, s),
+		handle:  egressHandle,
+		target2: constants.VertexId_Nil,
+		f:       filterF,
+	}
+
+	s.RegisterVertex(egressOp, egressHandle)
+	s.RegisterEdge(tailOp, egressOp, egressHandle)
+	tailOp.SetTarget(egressVid)
+
+	// Create feedback operator
+	feedbackTaskCh := make(chan request.Request, constants.ChanCacapity)
+	feedbackAckCh := make(chan request.Request, constants.ChanCacapity)
+
+	feedbackHandle := handles.NewLocalVertexHandle(feedbackTaskCh, feedbackAckCh)
+
+	feedbackVid := s.GenerateVID()
+
+	feedbackOp := &FeedbackOpCore{
+		OpCore: NewOpCore(feedbackVid, constants.VertexType_Feedback, s),
+		handle: feedbackHandle,
+	}
+
+	s.RegisterVertex(feedbackOp, feedbackHandle)
+	s.RegisterEdge(egressOp, feedbackOp, feedbackHandle)
+	// Use SetTarget2() because feedbackOp works as target2 of egress operator
+	// so that SetTarget() could be used to connect to downstream operators
+	// in the dataflow graph onwards
+	egressOp.SetTarget2(feedbackVid)
+
+	s.RegisterEdge(feedbackOp, ingressOp, ingressHandle2)
+	feedbackOp.SetTarget(ingressVid)
+	return egressOp
+}
+
 // ================ Imple some core functions for common use case ============= //
 
 func (op *OpCore) coreSendBy(
 	e edge.Edge,
-	msg request.Message,
+	msg *request.Message,
 	ts timestamp.Timestamp,
 	handle handles.VertexHandle,
 ) error {
@@ -133,7 +234,7 @@ func (op *OpCore) coreSendBy(
 	req := request.Request{
 		Typ:  constants.RequestType_SendBy,
 		Edge: e,
-		Msg:  msg,
+		Msg:  *msg,
 		Ts:   ts,
 	}
 	if err := op.GetWorkerHandle().Send(&req); err != nil {
@@ -177,5 +278,13 @@ func (op *OpCore) coreDecreOC(
 		return err
 	}
 	<-handle.AckRecv()
+	return nil
+}
+
+func (op *OpCore) tsCheckAndUpdate(ts *timestamp.Timestamp) error {
+	if !(timestamp.LE(&op.currTs, ts)) {
+		return errors.New("cannot accept an earlier timestamp from inspect operator")
+	}
+	op.currTs = *ts
 	return nil
 }

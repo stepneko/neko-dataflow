@@ -13,27 +13,26 @@ import (
 	"github.com/stepneko/neko-dataflow/utils"
 )
 
-type InspectHandle interface {
+type FeedbackHandle interface {
 	handles.VertexHandle
 }
 
-type InspectHandleCore struct {
+type FeedbackHandleCore struct {
 	handles.SimpleWorkerHandle
 }
 
-type InspectOp interface {
+type FeedbackOp interface {
 	scope.Scope
 	Operator
 	SingleInput
 }
 
-type InspectOpCore struct {
+type FeedbackOpCore struct {
 	*OpCore
 	handle InputHandle
-	f      DataCallback
 }
 
-func (op *InspectOpCore) Start(wg sync.WaitGroup) error {
+func (op *FeedbackOpCore) Start(wg sync.WaitGroup) error {
 	defer wg.Done()
 	for {
 		select {
@@ -47,7 +46,7 @@ func (op *InspectOpCore) Start(wg sync.WaitGroup) error {
 	}
 }
 
-func (op *InspectOpCore) handleReq(req *request.Request) error {
+func (op *FeedbackOpCore) handleReq(req *request.Request) error {
 	typ := req.Typ
 	edge := req.Edge
 	msg := req.Msg
@@ -66,47 +65,30 @@ func (op *InspectOpCore) handleReq(req *request.Request) error {
 	}
 }
 
-func (op *InspectOpCore) OnRecv(e edge.Edge, msg *request.Message, ts timestamp.Timestamp) error {
+func (op *FeedbackOpCore) OnRecv(e edge.Edge, msg *request.Message, ts timestamp.Timestamp) error {
 	if err := op.coreDecreOC(e, ts, op.handle); err != nil {
 		return err
 	}
 
-	// Send the result message to next target to continue the dataflow
-	iter, err := op.f(e, msg, ts)
-	if err != nil {
+	newTs := timestamp.CopyTimestampFrom(&ts)
+	if err := timestamp.HandleTimestamp(constants.VertexType_Feedback, newTs); err != nil {
 		return err
 	}
 
-	if iter == nil {
-		return nil
+	if err := op.SendBy(edge.NewEdge(op.id, op.target), msg, *newTs); err != nil {
+		return err
 	}
-
-	for {
-		flag, err := iter.HasElement()
-		if err != nil {
-			return err
-		}
-		if !flag {
-			return nil
-		}
-		m, err := iter.Iter()
-		if err != nil {
-			return err
-		}
-		if err := op.SendBy(edge.NewEdge(op.id, op.target), m, ts); err != nil {
-			return err
-		}
-	}
-}
-
-func (op *InspectOpCore) OnNotify(ts timestamp.Timestamp) error {
 	return nil
 }
 
-func (op *InspectOpCore) SendBy(e edge.Edge, msg *request.Message, ts timestamp.Timestamp) error {
+func (op *FeedbackOpCore) OnNotify(ts timestamp.Timestamp) error {
+	return nil
+}
+
+func (op *FeedbackOpCore) SendBy(e edge.Edge, msg *request.Message, ts timestamp.Timestamp) error {
 	return op.coreSendBy(e, msg, ts, op.handle)
 }
 
-func (op *InspectOpCore) NotifyAt(ts timestamp.Timestamp) error {
+func (op *FeedbackOpCore) NotifyAt(ts timestamp.Timestamp) error {
 	return nil
 }
