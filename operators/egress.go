@@ -18,21 +18,18 @@ type EgressHandle interface {
 }
 
 type EgressHandleCore struct {
-	handles.VertexHandle
+	handles.SimpleWorkerHandle
 }
 
 type EgressOp interface {
 	scope.Scope
 	Operator
 	SingleInput
-	DoubleOutput
 }
 
 type EgressOpCore struct {
 	*OpCore
-	handle  InputHandle
-	target2 constants.VertexId
-	f       FilterCallback
+	handle InputHandle
 }
 
 func (op *EgressOpCore) Start(wg sync.WaitGroup) error {
@@ -73,27 +70,15 @@ func (op *EgressOpCore) OnRecv(e edge.Edge, msg *request.Message, ts timestamp.T
 		return err
 	}
 
-	flag, err := op.f(e, msg, ts)
-	if err != nil {
+	newTs := timestamp.CopyTimestampFrom(&ts)
+	if err := timestamp.HandleTimestamp(constants.VertexType_Egress, newTs); err != nil {
 		return err
 	}
 
-	// If loop boolean flag is true, the dataflow should move back through the loop,
-	// via target2 which is the feedback operator
-	if flag {
-		if err := op.SendBy(edge.NewEdge(op.id, op.target2), msg, ts); err != nil {
-			return err
-		}
-		return nil
-		// Otherwise dataflow should move via target which is the egress operator
-	} else {
-		newTs := timestamp.CopyTimestampFrom(&ts)
-		timestamp.HandleTimestamp(constants.VertexType_Egress, newTs)
-		if err := op.SendBy(edge.NewEdge(op.id, op.target), msg, *newTs); err != nil {
-			return err
-		}
-		return nil
+	if err := op.SendBy(edge.NewEdge(op.id, op.target), msg, *newTs); err != nil {
+		return err
 	}
+	return nil
 }
 
 func (op *EgressOpCore) OnNotify(ts timestamp.Timestamp) error {
@@ -106,8 +91,4 @@ func (op *EgressOpCore) SendBy(e edge.Edge, msg *request.Message, ts timestamp.T
 
 func (op *EgressOpCore) NotifyAt(ts timestamp.Timestamp) error {
 	return nil
-}
-
-func (op *EgressOpCore) SetTarget2(vid constants.VertexId) {
-	op.target2 = vid
 }
