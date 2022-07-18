@@ -29,11 +29,11 @@ type InputOp interface {
 type InputOpCore struct {
 	*OpCore
 	handle  InputHandle
-	inputCh chan request.InputRaw
+	inputCh chan request.InputDatum
 }
 
 // NewInput creates input operator from scope
-func NewInput(s scope.Scope, inputCh chan request.InputRaw) InputOp {
+func NewInput(s scope.Scope, inputCh chan request.InputDatum) InputOp {
 	taskCh := make(chan request.Request, constants.ChanCacapity)
 	ackCh := make(chan request.Request, constants.ChanCacapity)
 
@@ -61,8 +61,8 @@ func (op *InputOpCore) Start(wg sync.WaitGroup) error {
 			if err := op.handleReq(&req); err != nil {
 				utils.Logger().Error(err.Error())
 			}
-		case inData := <-op.inputCh:
-			if err := op.handleInput(&inData); err != nil {
+		case inDatum := <-op.inputCh:
+			if err := op.handleInput(inDatum); err != nil {
 				utils.Logger().Error(err.Error())
 			}
 		}
@@ -75,16 +75,16 @@ func (op *InputOpCore) handleReq(req *request.Request) error {
 	return nil
 }
 
-func (op *InputOpCore) handleInput(inData *request.InputRaw) error {
-	msg := inData.Msg
-	ts := inData.Ts
+func (op *InputOpCore) handleInput(inDatum request.InputDatum) error {
+	msg := inDatum.Msg()
+	ts := inDatum.Ts()
 
 	if err := op.tsCheckAndUpdate(&ts); err != nil {
 		return err
 	}
 
 	e := edge.NewEdge(op.id, op.target)
-	if err := op.SendBy(e, &msg, ts); err != nil {
+	if err := op.SendBy(e, msg, ts); err != nil {
 		return err
 	}
 	return nil

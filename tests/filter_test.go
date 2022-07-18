@@ -17,7 +17,7 @@ import (
 )
 
 func TestFilterCase(t *testing.T) {
-	ch := make(chan request.InputRaw, 1024)
+	ch := make(chan request.InputDatum, 1024)
 	filterCh1 := make(chan string, 1024)
 	filterCh2 := make(chan string, 1024)
 	inspectCh := make(chan string, 1024)
@@ -51,10 +51,10 @@ func TestFilterCase(t *testing.T) {
 	go step.Start(f)
 
 	for i := 0; i < 10; i++ {
-		ch <- request.InputRaw{
-			Msg: *request.NewMessage([]byte(strconv.Itoa(i))),
-			Ts:  *timestamp.NewTimestamp(),
-		}
+		ch <- request.NewInputRaw(
+			request.NewMessage([]byte(strconv.Itoa(i))),
+			*timestamp.NewTimestamp(),
+		)
 	}
 
 	for i := 0; i < 5; i++ {

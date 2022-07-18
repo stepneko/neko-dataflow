@@ -18,8 +18,8 @@ import (
 
 func TestBinaryCase(t *testing.T) {
 
-	ch1 := make(chan request.InputRaw, 1024)
-	ch2 := make(chan request.InputRaw, 1024)
+	ch1 := make(chan request.InputDatum, 1024)
+	ch2 := make(chan request.InputDatum, 1024)
 
 	binaryCh1 := make(chan string, 1024)
 	binaryCh2 := make(chan string, 1024)
@@ -67,14 +67,14 @@ func TestBinaryCase(t *testing.T) {
 	go step.Start(f)
 
 	for i := 0; i < 5; i++ {
-		ch1 <- request.InputRaw{
-			Msg: *request.NewMessage([]byte(strconv.Itoa(i))),
-			Ts:  *timestamp.NewTimestamp(),
-		}
-		ch2 <- request.InputRaw{
-			Msg: *request.NewMessage([]byte(strconv.Itoa(i + 10))),
-			Ts:  *timestamp.NewTimestamp(),
-		}
+		ch1 <- request.NewInputRaw(
+			request.NewMessage([]byte(strconv.Itoa(i))),
+			*timestamp.NewTimestamp(),
+		)
+		ch2 <- request.NewInputRaw(
+			request.NewMessage([]byte(strconv.Itoa(i+10))),
+			*timestamp.NewTimestamp(),
+		)
 	}
 
 	for i := 0; i < 5; i++ {
