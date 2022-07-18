@@ -40,12 +40,10 @@ func (op *IngressAdapterOpCore) Start(wg sync.WaitGroup) error {
 		case <-op.Done():
 			return nil
 		case req := <-op.handle1.MsgRecv():
-			println("recv 1")
 			if err := op.handleReq(&req, constants.BinaryType_Left); err != nil {
 				utils.Logger().Error(err.Error())
 			}
 		case req := <-op.handle2.MsgRecv():
-			println("recv 2")
 			if err := op.handleReq(&req, constants.BinaryType_Right); err != nil {
 				utils.Logger().Error(err.Error())
 			}
