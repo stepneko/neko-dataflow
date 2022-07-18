@@ -16,7 +16,7 @@ type Timestamp struct {
 func NewTimestamp() *Timestamp {
 	return &Timestamp{
 		Epoch:    0,
-		Counters: []int{},
+		Counters: []int{0},
 	}
 }
 

@@ -19,12 +19,14 @@ func TestCopyTimestampFrom(t *testing.T) {
 	assert.NotEqual(t, ts, cts)
 
 	assert.Equal(t, ts.Epoch, 0)
-	assert.Equal(t, len(ts.Counters), 1)
-	assert.Equal(t, ts.Counters[0], 3)
+	assert.Equal(t, len(ts.Counters), 2)
+	assert.Equal(t, ts.Counters[0], 0)
+	assert.Equal(t, ts.Counters[1], 3)
 	assert.Equal(t, cts.Epoch, 1)
-	assert.Equal(t, len(cts.Counters), 2)
-	assert.Equal(t, cts.Counters[0], 3)
-	assert.Equal(t, cts.Counters[1], 6)
+	assert.Equal(t, len(cts.Counters), 3)
+	assert.Equal(t, cts.Counters[0], 0)
+	assert.Equal(t, cts.Counters[1], 3)
+	assert.Equal(t, cts.Counters[2], 6)
 }
 
 func TestLE(t *testing.T) {
