@@ -17,7 +17,7 @@ import (
 
 func main() {
 
-	ch := make(chan request.InputRaw)
+	ch := make(chan request.InputDatum)
 
 	f := func(w worker.Worker) error {
 		w.Dataflow(func(s scope.Scope) error {
@@ -65,10 +65,10 @@ func main() {
 	go step.Start(f)
 
 	for i := 0; i < 1; i++ {
-		ch <- request.InputRaw{
-			Msg: *request.NewMessage([]byte(strconv.Itoa(i))),
-			Ts:  *timestamp.NewTimestamp(),
-		}
+		ch <- request.NewInputRaw(
+			request.NewMessage([]byte(strconv.Itoa(i))),
+			*timestamp.NewTimestamp(),
+		)
 	}
 
 	time.Sleep(time.Second * 5)

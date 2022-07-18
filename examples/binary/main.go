@@ -17,8 +17,8 @@ import (
 
 func main() {
 
-	ch1 := make(chan request.InputRaw, 1024)
-	ch2 := make(chan request.InputRaw, 1024)
+	ch1 := make(chan request.InputDatum, 1024)
+	ch2 := make(chan request.InputDatum, 1024)
 
 	f := func(w worker.Worker) error {
 		w.Dataflow(func(s scope.Scope) error {
@@ -50,17 +50,17 @@ func main() {
 	go step.Start(f)
 
 	for i := 0; i < 5; i++ {
-		ch1 <- request.InputRaw{
-			Msg: *request.NewMessage([]byte(strconv.Itoa(i))),
-			Ts:  *timestamp.NewTimestamp(),
-		}
+		ch1 <- request.NewInputRaw(
+			request.NewMessage([]byte(strconv.Itoa(i))),
+			*timestamp.NewTimestamp(),
+		)
 	}
 
 	for i := 10; i < 15; i++ {
-		ch2 <- request.InputRaw{
-			Msg: *request.NewMessage([]byte(strconv.Itoa(i))),
-			Ts:  *timestamp.NewTimestamp(),
-		}
+		ch2 <- request.NewInputRaw(
+			request.NewMessage([]byte(strconv.Itoa(i))),
+			*timestamp.NewTimestamp(),
+		)
 	}
 
 	time.Sleep(time.Second * 5)
