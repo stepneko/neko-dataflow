@@ -137,56 +137,73 @@ func (op *OpCore) Filter(f FilterCallback) FilterOp {
 }
 
 // Loop creates a loop structure in diagram:
-// op --[OnRecv1]--> Ingress(as ups) --> loop struct[func(ups)] --> Egress --[target1]--> Onward...
-//                       ^                                            |
-// 			   [OnRecv2] |                                            |[target2]
-//                       +------------------Feedback------------------+
+// op -> Ingress -[OnRecv1]-> IngressAdapter -> loop struct[func(ups)] -> EgressAdapter -[target1]-> Egress -> Onward...
+//                                  ^                                            |
+//                        [OnRecv2] |                                            |[target2]
+//                                  +------------------Feedback------------------+
 func (op *OpCore) Loop(dataF func(ups Operator) Operator, filterF FilterCallback) EgressOp {
 	s := op.AsScope()
 
 	// Create ingress operator
 	ingressTaskCh1 := make(chan request.Request, constants.ChanCacapity)
-	ingressTaskCh2 := make(chan request.Request, constants.ChanCacapity)
-
 	ingressAckCh1 := make(chan request.Request, constants.ChanCacapity)
-	ingressAckCh2 := make(chan request.Request, constants.ChanCacapity)
 
-	ingressHandle1 := handles.NewLocalVertexHandle(ingressTaskCh1, ingressAckCh1)
-	ingressHandle2 := handles.NewLocalVertexHandle(ingressTaskCh2, ingressAckCh2)
+	ingressHandle := handles.NewLocalVertexHandle(ingressTaskCh1, ingressAckCh1)
 
 	ingressVid := s.GenerateVID()
 
 	ingressOp := &IngressOpCore{
-		OpCore:  NewOpCore(ingressVid, constants.VertexType_Ingress, s),
-		handle1: ingressHandle1,
-		handle2: ingressHandle2,
+		OpCore: NewOpCore(ingressVid, constants.VertexType_Ingress, s),
+		handle: ingressHandle,
 	}
 
-	s.RegisterVertex(ingressOp, ingressHandle1)
-	s.RegisterEdge(op, ingressOp, ingressHandle1)
+	s.RegisterVertex(ingressOp, ingressHandle)
+	s.RegisterEdge(op, ingressOp, ingressHandle)
 	op.SetTarget(ingressVid)
 
+	// Create ingress adapter operator
+	ingressAdpTaskCh1 := make(chan request.Request, constants.ChanCacapity)
+	ingressAdpTaskCh2 := make(chan request.Request, constants.ChanCacapity)
+
+	ingressAdpAckCh1 := make(chan request.Request, constants.ChanCacapity)
+	ingressAdpAckCh2 := make(chan request.Request, constants.ChanCacapity)
+
+	ingressAdpHandle1 := handles.NewLocalVertexHandle(ingressAdpTaskCh1, ingressAdpAckCh1)
+	ingressAdpHandle2 := handles.NewLocalVertexHandle(ingressAdpTaskCh2, ingressAdpAckCh2)
+
+	ingressAdpVid := s.GenerateVID()
+
+	ingressAdpOp := &IngressAdapterOpCore{
+		OpCore:  NewOpCore(ingressAdpVid, constants.VertexType_IngressAdapter, s),
+		handle1: ingressAdpHandle1,
+		handle2: ingressAdpHandle2,
+	}
+
+	s.RegisterVertex(ingressAdpOp, ingressAdpHandle1)
+	s.RegisterEdge(ingressOp, ingressAdpOp, ingressAdpHandle1)
+	ingressOp.SetTarget(ingressAdpVid)
+
 	// Make loop struct
-	tailOp := dataF(ingressOp)
+	tailOp := dataF(ingressAdpOp)
 
-	// Create egress operator
-	egressTaskCh := make(chan request.Request, constants.ChanCacapity)
-	egressAckCh := make(chan request.Request, constants.ChanCacapity)
+	// Create egress adapter operator
+	egressAdpTaskCh := make(chan request.Request, constants.ChanCacapity)
+	egressAdpAckCh := make(chan request.Request, constants.ChanCacapity)
 
-	egressHandle := handles.NewLocalVertexHandle(egressTaskCh, egressAckCh)
+	egressAdpHandle := handles.NewLocalVertexHandle(egressAdpTaskCh, egressAdpAckCh)
 
-	egressVid := s.GenerateVID()
+	egressAdpVid := s.GenerateVID()
 
-	egressOp := &EgressOpCore{
-		OpCore:  NewOpCore(egressVid, constants.VertexType_Egress, s),
-		handle:  egressHandle,
+	egressAdpOp := &EgressAdapterOpCore{
+		OpCore:  NewOpCore(egressAdpVid, constants.VertexType_EgressAdapter, s),
+		handle:  egressAdpHandle,
 		target2: constants.VertexId_Nil,
 		f:       filterF,
 	}
 
-	s.RegisterVertex(egressOp, egressHandle)
-	s.RegisterEdge(tailOp, egressOp, egressHandle)
-	tailOp.SetTarget(egressVid)
+	s.RegisterVertex(egressAdpOp, egressAdpHandle)
+	s.RegisterEdge(tailOp, egressAdpOp, egressAdpHandle)
+	tailOp.SetTarget(egressAdpVid)
 
 	// Create feedback operator
 	feedbackTaskCh := make(chan request.Request, constants.ChanCacapity)
@@ -202,14 +219,28 @@ func (op *OpCore) Loop(dataF func(ups Operator) Operator, filterF FilterCallback
 	}
 
 	s.RegisterVertex(feedbackOp, feedbackHandle)
-	s.RegisterEdge(egressOp, feedbackOp, feedbackHandle)
-	// Use SetTarget2() because feedbackOp works as target2 of egress operator
-	// so that SetTarget() could be used to connect to downstream operators
-	// in the dataflow graph onwards
-	egressOp.SetTarget2(feedbackVid)
+	s.RegisterEdge(egressAdpOp, feedbackOp, feedbackHandle)
+	egressAdpOp.SetTarget2(feedbackVid)
 
-	s.RegisterEdge(feedbackOp, ingressOp, ingressHandle2)
-	feedbackOp.SetTarget(ingressVid)
+	s.RegisterEdge(feedbackOp, ingressAdpOp, ingressAdpHandle2)
+	feedbackOp.SetTarget(ingressAdpVid)
+
+	// Create egress adapter
+	egressTaskCh := make(chan request.Request, constants.ChanCacapity)
+	egressAckCh := make(chan request.Request, constants.ChanCacapity)
+
+	egressHandle := handles.NewLocalVertexHandle(egressTaskCh, egressAckCh)
+
+	egressVid := s.GenerateVID()
+
+	egressOp := &EgressOpCore{
+		OpCore: NewOpCore(egressVid, constants.VertexType_Egress, s),
+		handle: egressHandle,
+	}
+
+	s.RegisterVertex(egressOp, egressHandle)
+	s.RegisterEdge(egressAdpOp, egressOp, egressHandle)
+	egressAdpOp.SetTarget(egressVid)
 	return egressOp
 }
 

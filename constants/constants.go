@@ -9,12 +9,14 @@ const VertexId_Nil = 0
 type VertexType int
 
 const (
-	VertexType_Input    VertexType = 1
-	VertexType_Ingress  VertexType = 2
-	VertexType_Egress   VertexType = 3
-	VertexType_Feedback VertexType = 4
-	VertexType_Inspect  VertexType = 5
-	VertexType_Bianry   VertexType = 6
+	VertexType_Input          VertexType = 1
+	VertexType_Ingress        VertexType = 2
+	VertexType_IngressAdapter VertexType = 3
+	VertexType_Egress         VertexType = 4
+	VertexType_EgressAdapter  VertexType = 5
+	VertexType_Feedback       VertexType = 6
+	VertexType_Inspect        VertexType = 7
+	VertexType_Bianry         VertexType = 8
 )
 
 const VertexInDirs int = 2

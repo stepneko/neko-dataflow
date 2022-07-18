@@ -26,13 +26,11 @@ func main() {
 				func(ups operators.Operator) operators.Operator {
 					return ups.
 						Inspect(func(e edge.Edge, msg *request.Message, ts timestamp.Timestamp) (iterator.Iterator[*request.Message], error) {
-							println(fmt.Sprintf("inspect operatro 1 got ts: %s", ts.ToString()))
-							println(fmt.Sprintf("inspect operator 1 inside loop received message: %s", msg.ToString()))
+							println(fmt.Sprintf("inspect operator 1 inside loop received message: %s, ts: %s", msg.ToString(), ts.ToString()))
 							return iterator.IterFromSingleton(msg), nil
 						}).
 						Inspect(func(e edge.Edge, msg *request.Message, ts timestamp.Timestamp) (iterator.Iterator[*request.Message], error) {
-							println(fmt.Sprintf("inspect operatro 2 got ts: %s", ts.ToString()))
-							println(fmt.Sprintf("inspect operator 2 inside loop received message: %s", msg.ToString()))
+							println(fmt.Sprintf("inspect operator 2 inside loop received message: %s, ts: %s", msg.ToString(), ts.ToString()))
 							val, err := strconv.Atoi(msg.ToString())
 							if err != nil {
 								return nil, err
@@ -54,8 +52,7 @@ func main() {
 				},
 			).
 				Inspect(func(e edge.Edge, msg *request.Message, ts timestamp.Timestamp) (iterator.Iterator[*request.Message], error) {
-					println(fmt.Sprintf("inspect operator 3 outside loop received message: %s", msg.ToString()))
-					println(fmt.Sprintf("inspect operatro 3 got ts: %s", ts.ToString()))
+					println(fmt.Sprintf("inspect operator 3 outside loop received message: %s, ts: %s", msg.ToString(), ts.ToString()))
 					return nil, nil
 				})
 			return nil
