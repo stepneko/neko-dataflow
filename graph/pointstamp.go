@@ -1,10 +1,10 @@
-package scheduler
+package graph
 
 import (
 	"github.com/stepneko/neko-dataflow/constants"
+	"github.com/stepneko/neko-dataflow/edge"
 	"github.com/stepneko/neko-dataflow/timestamp"
 	"github.com/stepneko/neko-dataflow/utils"
-	"github.com/stepneko/neko-dataflow/vertex"
 )
 
 // Pointstamp, as referred to in the paper, is a tuple with two types:
@@ -61,12 +61,12 @@ func (vps *VertexPointStamp) Hash() string {
 
 // EdgePointStamp is an edge based pointstamp
 type EdgePointStamp struct {
-	edge vertex.Edge
+	edge edge.Edge
 	ts   *timestamp.Timestamp
 }
 
 func NewEdgePointStamp(
-	e vertex.Edge,
+	e edge.Edge,
 	ts *timestamp.Timestamp,
 ) *EdgePointStamp {
 	return &EdgePointStamp{

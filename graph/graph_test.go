@@ -1,4 +1,4 @@
-package scheduler
+package graph
 
 import (
 	"testing"
@@ -6,117 +6,109 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/stepneko/neko-dataflow/constants"
+	"github.com/stepneko/neko-dataflow/edge"
 	"github.com/stepneko/neko-dataflow/timestamp"
-	"github.com/stepneko/neko-dataflow/vertex"
 )
 
 // Build a sample graph to test on, and return
 // the array of vertices in positioned array.
 //
-// [v0]Input -> [v1]Ingress --> [v2]Generic -> [v3]Generic -> [v5]Egress -> [v6]Generic
+// [v1]Input -> [v2]Ingress --> [v3]Generic -> [v4]Generic -> [v6]Egress -> [v7]Generic
 //                                   ^                   |
 //                                   |                   |
-//                                   +-- [v4]Feedback  <-+
+//                                   +-- [v5]Feedback  <-+
 //
-func BuildGraph(t *testing.T, g *Graph, vsp *[]vertex.Vertex) {
-	*vsp = append(*vsp, vertex.NewInputVertex())
-	*vsp = append(*vsp, vertex.NewIngressVertex())
-	*vsp = append(*vsp, vertex.NewVertexCore())
-	*vsp = append(*vsp, vertex.NewVertexCore())
-	*vsp = append(*vsp, vertex.NewFeedbackVertex())
-	*vsp = append(*vsp, vertex.NewEgressVertex())
-	*vsp = append(*vsp, vertex.NewVertexCore())
+func BuildGraph(t *testing.T, g *Graph) {
+	// Insert vertices
+	g.InsertVertex(1, constants.VertexType_Input)
+	g.InsertVertex(2, constants.VertexType_Ingress)
+	g.InsertVertex(3, constants.VertexType_Inspect)
+	g.InsertVertex(4, constants.VertexType_Inspect)
+	g.InsertVertex(5, constants.VertexType_Feedback)
+	g.InsertVertex(6, constants.VertexType_Egress)
+	g.InsertVertex(7, constants.VertexType_Inspect)
 
-	vs := *vsp
+	// Insert edge
+	g.InsertEdge(edge.NewEdge(1, 2))
+	g.InsertEdge(edge.NewEdge(2, 3))
+	g.InsertEdge(edge.NewEdge(3, 4))
+	g.InsertEdge(edge.NewEdge(4, 5))
+	g.InsertEdge(edge.NewEdge(5, 3))
+	g.InsertEdge(edge.NewEdge(4, 6))
+	g.InsertEdge(edge.NewEdge(6, 7))
 
-	// Insert the vertices into graph
-	for index, v := range vs {
-		v.SetId(constants.VertexId(index))
-		g.InsertVertex(v)
-	}
-
-	g.InsertEdge(vertex.NewEdge(vs[0].GetId(), vs[1].GetId()), constants.VertexInDir_Default)
-	g.InsertEdge(vertex.NewEdge(vs[1].GetId(), vs[2].GetId()), constants.VertexInDir_Default)
-	g.InsertEdge(vertex.NewEdge(vs[2].GetId(), vs[3].GetId()), constants.VertexInDir_Default)
-	g.InsertEdge(vertex.NewEdge(vs[3].GetId(), vs[4].GetId()), constants.VertexInDir_Default)
-	g.InsertEdge(vertex.NewEdge(vs[4].GetId(), vs[2].GetId()), constants.VertexInDir_Default)
-	g.InsertEdge(vertex.NewEdge(vs[3].GetId(), vs[5].GetId()), constants.VertexInDir_Default)
-	g.InsertEdge(vertex.NewEdge(vs[5].GetId(), vs[6].GetId()), constants.VertexInDir_Default)
-
-	assert.Equal(t, len(g.VertexMap[vs[0].GetId()].children), 1)
-	assert.Equal(t, len(g.VertexMap[vs[1].GetId()].children), 1)
-	assert.Equal(t, len(g.VertexMap[vs[2].GetId()].children), 1)
-	assert.Equal(t, len(g.VertexMap[vs[3].GetId()].children), 2)
-	assert.Equal(t, len(g.VertexMap[vs[4].GetId()].children), 1)
-	assert.Equal(t, len(g.VertexMap[vs[5].GetId()].children), 1)
-	assert.Equal(t, len(g.VertexMap[vs[6].GetId()].children), 0)
+	assert.Equal(t, len(g.VertexMap[1].Children), 1)
+	assert.Equal(t, len(g.VertexMap[2].Children), 1)
+	assert.Equal(t, len(g.VertexMap[3].Children), 1)
+	assert.Equal(t, len(g.VertexMap[4].Children), 2)
+	assert.Equal(t, len(g.VertexMap[5].Children), 1)
+	assert.Equal(t, len(g.VertexMap[6].Children), 1)
+	assert.Equal(t, len(g.VertexMap[7].Children), 0)
 }
 
 func TestInsertVertex(t *testing.T) {
 	g := NewGraph()
-	v := vertex.NewVertexCore()
-	g.InsertVertex(v)
+	vid := constants.VertexId(1)
+	g.InsertVertex(vid, constants.VertexType_Input)
 
-	node, exist := g.VertexMap[v.GetId()]
+	node, exist := g.VertexMap[vid]
 	assert.Equal(t, exist, true)
-	assert.Equal(t, node.vertex, v)
+	assert.Equal(t, node.Vid, vid)
+	assert.Equal(t, node.Typ, constants.VertexType_Input)
 }
 
 func TestInsertEdge(t *testing.T) {
 	g := NewGraph()
-	v1 := vertex.NewUnaryVertex()
-	v1.SetId(1)
-	g.InsertVertex(v1)
-	v2 := vertex.NewIngressVertex()
-	v2.SetId(2)
-	g.InsertVertex(v2)
-	e1 := vertex.NewEdge(v1.GetId(), v2.GetId())
-	g.InsertEdge(e1, constants.VertexInDir_Default)
+	vid1 := constants.VertexId(1)
+	vid2 := constants.VertexId(2)
+	g.InsertVertex(vid1, constants.VertexType_Input)
+	g.InsertVertex(vid2, constants.VertexType_Ingress)
+	g.InsertEdge(edge.NewEdge(vid1, vid2))
 
-	node1, exist := g.VertexMap[v1.GetId()]
+	node1, exist := g.VertexMap[vid1]
 	assert.Equal(t, exist, true)
-	assert.Equal(t, node1.vertex, v1)
+	assert.Equal(t, node1.Vid, vid1)
+	assert.Equal(t, node1.Typ, constants.VertexType_Input)
 
-	node2, exist := g.VertexMap[v2.GetId()]
+	node2, exist := g.VertexMap[vid2]
 	assert.Equal(t, exist, true)
-	assert.Equal(t, node2.vertex, v2)
+	assert.Equal(t, node2.Vid, vid2)
+	assert.Equal(t, node2.Typ, constants.VertexType_Ingress)
 
-	assert.Equal(t, len(node1.children), 1)
-	assert.Equal(t, len(node2.children), 0)
+	assert.Equal(t, len(node1.Children), 1)
+	assert.Equal(t, len(node2.Children), 0)
 
-	assert.Equal(t, node1.children[node2], true)
+	assert.Equal(t, node1.Children[node2], true)
 
-	v3 := vertex.NewEgressVertex()
-	v3.SetId(3)
-	g.InsertVertex(v3)
-	e2 := vertex.NewEdge(v2.GetId(), v3.GetId())
-	g.InsertEdge(e2, constants.VertexInDir_Default)
+	vid3 := constants.VertexId(3)
+	g.InsertVertex(vid3, constants.VertexType_Egress)
+	g.InsertEdge(edge.NewEdge(vid2, vid3))
 
-	newNode2, exist := g.VertexMap[v2.GetId()]
+	newNode2, exist := g.VertexMap[vid2]
 	assert.Equal(t, exist, true)
 	assert.Equal(t, newNode2, node2)
-	assert.Equal(t, newNode2.vertex, v2)
-	assert.Equal(t, len(node2.children), 1)
+	assert.Equal(t, newNode2.Vid, vid2)
+	assert.Equal(t, node2.Typ, constants.VertexType_Ingress)
+	assert.Equal(t, len(node2.Children), 1)
 
-	node3, exists := g.VertexMap[v3.GetId()]
+	node3, exists := g.VertexMap[vid3]
 	assert.Equal(t, exists, true)
-	assert.Equal(t, node3.vertex, v3)
-	assert.Equal(t, len(node3.children), 0)
+	assert.Equal(t, node3.Vid, vid3)
+	assert.Equal(t, node3.Typ, constants.VertexType_Egress)
+	assert.Equal(t, len(node3.Children), 0)
 
-	assert.Equal(t, node2.children[node3], true)
+	assert.Equal(t, node2.Children[node3], true)
 }
 
 func TestCouldResultIn(t *testing.T) {
 	g := NewGraph()
-	vsp := &[]vertex.Vertex{}
-	BuildGraph(t, g, vsp)
-	vs := *vsp
+	BuildGraph(t, g)
 
-	// [(v0, v1), {0, []}] vs. [(v5, v6), {0, []}]
-	ae := vertex.NewEdge(vs[0].GetId(), vs[1].GetId())
+	// [(v1, v2), {0, []}] vs. [(v6, v7), {0, []}]
+	ae := edge.NewEdge(1, 2)
 	ats := timestamp.NewTimestamp()
 	aps := NewEdgePointStamp(ae, ats)
-	be := vertex.NewEdge(vs[5].GetId(), vs[6].GetId())
+	be := edge.NewEdge(6, 7)
 	bts := timestamp.NewTimestamp()
 	var bps Pointstamp = NewEdgePointStamp(be, bts)
 	res, err := g.CouldResultIn(aps, bps)
@@ -126,11 +118,11 @@ func TestCouldResultIn(t *testing.T) {
 	assert.Equal(t, err, nil)
 	assert.Equal(t, res, false)
 
-	// [(v0, v1), {1, []}] vs. [(v5, v6), {0, []}]
-	ae = vertex.NewEdge(vs[0].GetId(), vs[1].GetId())
+	// [(v1, v2), {1, []}] vs. [(v6, v7), {0, []}]
+	ae = edge.NewEdge(1, 2)
 	ats = timestamp.NewTimestampWithParams(1, []int{})
 	aps = NewEdgePointStamp(ae, ats)
-	be = vertex.NewEdge(vs[5].GetId(), vs[6].GetId())
+	be = edge.NewEdge(6, 7)
 	bts = timestamp.NewTimestamp()
 	bps = NewEdgePointStamp(be, bts)
 	res, err = g.CouldResultIn(aps, bps)
@@ -140,11 +132,11 @@ func TestCouldResultIn(t *testing.T) {
 	assert.Equal(t, err, nil)
 	assert.Equal(t, res, false)
 
-	// [(v3, v5), {0, [5]}] vs. [(v5, v6), {0, []}]
-	ae = vertex.NewEdge(vs[3].GetId(), vs[5].GetId())
+	// [(v4, v6), {0, [5]}] vs. [(v6, v7), {0, []}]
+	ae = edge.NewEdge(4, 6)
 	ats = timestamp.NewTimestampWithParams(0, []int{5})
 	aps = NewEdgePointStamp(ae, ats)
-	be = vertex.NewEdge(vs[5].GetId(), vs[6].GetId())
+	be = edge.NewEdge(6, 7)
 	bts = timestamp.NewTimestamp()
 	bps = NewEdgePointStamp(be, bts)
 	res, err = g.CouldResultIn(aps, bps)
@@ -154,11 +146,11 @@ func TestCouldResultIn(t *testing.T) {
 	assert.Equal(t, err, nil)
 	assert.Equal(t, res, false)
 
-	// [(v3, v4), {0, [5]}] vs. [(v2, v3), {0, [5]}]
-	ae = vertex.NewEdge(vs[3].GetId(), vs[4].GetId())
+	// [(v4, v5), {0, [5]}] vs. [(v3, v4), {0, [5]}]
+	ae = edge.NewEdge(4, 5)
 	ats = timestamp.NewTimestampWithParams(0, []int{5})
 	aps = NewEdgePointStamp(ae, ats)
-	be = vertex.NewEdge(vs[2].GetId(), vs[3].GetId())
+	be = edge.NewEdge(3, 4)
 	bts = timestamp.NewTimestampWithParams(0, []int{5})
 	bps = NewEdgePointStamp(be, bts)
 	res, err = g.CouldResultIn(aps, bps)
@@ -168,11 +160,11 @@ func TestCouldResultIn(t *testing.T) {
 	assert.Equal(t, err, nil)
 	assert.Equal(t, res, true)
 
-	// [(v3, v4), {0, [5]}] vs. [(v2, v3), {0, [6]}]
-	ae = vertex.NewEdge(vs[3].GetId(), vs[4].GetId())
+	// [(v4, v5), {0, [5]}] vs. [(v3, v4), {0, [6]}]
+	ae = edge.NewEdge(4, 5)
 	ats = timestamp.NewTimestampWithParams(0, []int{5})
 	aps = NewEdgePointStamp(ae, ats)
-	be = vertex.NewEdge(vs[2].GetId(), vs[3].GetId())
+	be = edge.NewEdge(3, 4)
 	bts = timestamp.NewTimestampWithParams(0, []int{6})
 	bps = NewEdgePointStamp(be, bts)
 	res, err = g.CouldResultIn(aps, bps)
@@ -182,12 +174,12 @@ func TestCouldResultIn(t *testing.T) {
 	assert.Equal(t, err, nil)
 	assert.Equal(t, res, false)
 
-	// [(v2, v3), {0, [5]}] vs. [(v3, v3), {0, [5]}]
-	ae = vertex.NewEdge(vs[2].GetId(), vs[3].GetId())
+	// [(v3, v4), {0, [5]}] vs. [(v4, v4), {0, [5]}]
+	ae = edge.NewEdge(3, 4)
 	ats = timestamp.NewTimestampWithParams(0, []int{5})
 	aps = NewEdgePointStamp(ae, ats)
 	bts = timestamp.NewTimestampWithParams(0, []int{5})
-	bps = NewVertexPointStamp(vs[3].GetId(), bts)
+	bps = NewVertexPointStamp(4, bts)
 	res, err = g.CouldResultIn(aps, bps)
 	assert.Equal(t, err, nil)
 	assert.Equal(t, res, true)
@@ -195,12 +187,12 @@ func TestCouldResultIn(t *testing.T) {
 	assert.Equal(t, err, nil)
 	assert.Equal(t, res, false)
 
-	// [(v2, v3), {0, [6]}] vs. [(v3, v3), {0, [5]}]
-	ae = vertex.NewEdge(vs[2].GetId(), vs[3].GetId())
+	// [(v3, v4), {0, [6]}] vs. [(v4, v4), {0, [5]}]
+	ae = edge.NewEdge(3, 4)
 	ats = timestamp.NewTimestampWithParams(0, []int{6})
 	aps = NewEdgePointStamp(ae, ats)
 	bts = timestamp.NewTimestampWithParams(0, []int{5})
-	bps = NewVertexPointStamp(vs[3].GetId(), bts)
+	bps = NewVertexPointStamp(4, bts)
 	res, err = g.CouldResultIn(aps, bps)
 	assert.Equal(t, err, nil)
 	assert.Equal(t, res, false)
@@ -211,22 +203,20 @@ func TestCouldResultIn(t *testing.T) {
 
 func TestIncreOCAndDecreOC(t *testing.T) {
 	g := NewGraph()
-	vsp := &[]vertex.Vertex{}
-	BuildGraph(t, g, vsp)
-	vs := *vsp
+	BuildGraph(t, g)
 
-	// Just increment OC for vs[0]
+	// Just increment OC for v1
 	ts := timestamp.NewTimestamp()
-	ps1 := NewVertexPointStamp(vs[0].GetId(), ts)
+	ps1 := NewVertexPointStamp(1, ts)
 	g.IncreOC(ps1)
 
 	assert.Equal(t, len(g.ActivePsMap), 1)
 	assert.Equal(t, g.ActivePsMap[ps1.Hash()].OC, 1)
 	assert.Equal(t, g.ActivePsMap[ps1.Hash()].PC, 0)
 
-	// Then increment another OC for edge[2, 3]
+	// Then increment another OC for edge[3, 4]
 	ts = timestamp.NewTimestampWithParams(0, []int{5})
-	e := vertex.NewEdge(vs[2].GetId(), vs[3].GetId())
+	e := edge.NewEdge(3, 4)
 	ps2 := NewEdgePointStamp(e, ts)
 	g.IncreOC(ps2)
 	assert.Equal(t, len(g.ActivePsMap), 2)
@@ -235,9 +225,9 @@ func TestIncreOCAndDecreOC(t *testing.T) {
 	assert.Equal(t, g.ActivePsMap[ps2.Hash()].OC, 1)
 	assert.Equal(t, g.ActivePsMap[ps2.Hash()].PC, 1)
 
-	// Increment another OC for edge[5, 6]
+	// Increment another OC for edge[6, 7]
 	ts = timestamp.NewTimestamp()
-	e = vertex.NewEdge(vs[5].GetId(), vs[6].GetId())
+	e = edge.NewEdge(6, 7)
 	ps3 := NewEdgePointStamp(e, ts)
 	g.IncreOC(ps3)
 	assert.Equal(t, len(g.ActivePsMap), 3)
@@ -248,10 +238,10 @@ func TestIncreOCAndDecreOC(t *testing.T) {
 	assert.Equal(t, g.ActivePsMap[ps3.Hash()].OC, 1)
 	assert.Equal(t, g.ActivePsMap[ps3.Hash()].PC, 2)
 
-	// Increment yet another OC for edge[2, 3] with same pointstamp
+	// Increment yet another OC for edge[3, 4] with same pointstamp
 	// Should not affect other pointstamps, just increase 1 OC
 	ts = timestamp.NewTimestampWithParams(0, []int{5})
-	e = vertex.NewEdge(vs[2].GetId(), vs[3].GetId())
+	e = edge.NewEdge(3, 4)
 	ps4 := NewEdgePointStamp(e, ts)
 	g.IncreOC(ps4)
 	assert.Equal(t, len(g.ActivePsMap), 3)
@@ -264,7 +254,7 @@ func TestIncreOCAndDecreOC(t *testing.T) {
 
 	// Increment a pointstamp that is most recent
 	ts = timestamp.NewTimestampWithParams(1, []int{6})
-	e = vertex.NewEdge(vs[2].GetId(), vs[3].GetId())
+	e = edge.NewEdge(3, 4)
 	ps5 := NewEdgePointStamp(e, ts)
 	g.IncreOC(ps5)
 	assert.Equal(t, len(g.ActivePsMap), 4)
