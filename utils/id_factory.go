@@ -1,15 +1,13 @@
 package utils
 
-import (
-	"github.com/stepneko/neko-dataflow/constants"
-)
+import "github.com/stepneko/neko-dataflow/vertex"
 
 type IdFactory interface {
-	Generate() constants.VertexId
+	Generate() vertex.Id
 }
 
 type SimpleIdFactory struct {
-	nextId constants.VertexId
+	nextId vertex.Id
 }
 
 func NewSimpleIdFactory() *SimpleIdFactory {
@@ -18,7 +16,7 @@ func NewSimpleIdFactory() *SimpleIdFactory {
 	}
 }
 
-func (f *SimpleIdFactory) Generate() constants.VertexId {
+func (f *SimpleIdFactory) Generate() vertex.Id {
 	res := f.nextId
 	f.nextId += 1
 	return res

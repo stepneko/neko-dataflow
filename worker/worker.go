@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/stepneko/neko-dataflow/constants"
 	"github.com/stepneko/neko-dataflow/edge"
 	"github.com/stepneko/neko-dataflow/graph"
 	"github.com/stepneko/neko-dataflow/handles"
@@ -16,6 +15,8 @@ import (
 	"github.com/stepneko/neko-dataflow/utils"
 	"github.com/stepneko/neko-dataflow/vertex"
 )
+
+type Id int
 
 type DataflowFunc = func(s scope.Scope) error
 
@@ -29,12 +30,12 @@ type Worker interface {
 
 type SimpleWorker struct {
 	ctx        context.Context
-	id         constants.WorkerId
+	id         Id
 	vidFactory utils.IdFactory
 	graph      *graph.Graph
 	handle     handles.WorkerHandle
-	vHandles   map[constants.VertexId]map[constants.VertexId]handles.VertexHandle
-	vertices   map[constants.VertexId]vertex.Vertex
+	vHandles   map[vertex.Id]map[vertex.Id]handles.VertexHandle
+	vertices   map[vertex.Id]vertex.Vertex
 }
 
 func NewSimpleWorker(ctx context.Context) *SimpleWorker {
@@ -44,8 +45,8 @@ func NewSimpleWorker(ctx context.Context) *SimpleWorker {
 		vidFactory: utils.NewSimpleIdFactory(),
 		graph:      graph.NewGraph(),
 		handle:     handles.NewSimpleWorkerHandle(),
-		vHandles:   make(map[constants.VertexId]map[constants.VertexId]handles.VertexHandle),
-		vertices:   make(map[constants.VertexId]vertex.Vertex),
+		vHandles:   make(map[vertex.Id]map[vertex.Id]handles.VertexHandle),
+		vertices:   make(map[vertex.Id]vertex.Vertex),
 	}
 }
 
@@ -91,7 +92,7 @@ func (w *SimpleWorker) Name() string {
 	return fmt.Sprintf("worker %d", w.id)
 }
 
-func (w *SimpleWorker) GenerateVID() constants.VertexId {
+func (w *SimpleWorker) GenerateVID() vertex.Id {
 	return w.vidFactory.Generate()
 }
 
@@ -146,8 +147,8 @@ func (w *SimpleWorker) Done() <-chan struct{} {
 
 //============== Private functions ================//
 func (w *SimpleWorker) getHandle(
-	src constants.VertexId,
-	target constants.VertexId,
+	src vertex.Id,
+	target vertex.Id,
 ) (handles.VertexHandle, error) {
 	m, exist := w.vHandles[src]
 	if !exist {
@@ -161,27 +162,27 @@ func (w *SimpleWorker) getHandle(
 }
 
 func (w *SimpleWorker) setHandle(
-	src constants.VertexId,
-	target constants.VertexId,
+	src vertex.Id,
+	target vertex.Id,
 	handle handles.VertexHandle,
 ) {
 	_, exist := w.vHandles[src]
 	if !exist {
-		w.vHandles[src] = make(map[constants.VertexId]handles.VertexHandle)
+		w.vHandles[src] = make(map[vertex.Id]handles.VertexHandle)
 	}
 	w.vHandles[src][target] = handle
 }
 
 func (w *SimpleWorker) handleReq(req *request.Request) error {
-	typ := req.Typ
+	typ := req.Type
 
-	if typ == constants.RequestType_IncreOC {
+	if typ == request.Type_IncreOC {
 		return w.increOC(req)
-	} else if typ == constants.RequestType_DecreOC {
+	} else if typ == request.Type_DecreOC {
 		return w.decreOC(req)
-	} else if typ == constants.RequestType_SendBy {
+	} else if typ == request.Type_SendBy {
 		return w.sendBy(req)
-	} else if typ == constants.RequestType_NotifyAt {
+	} else if typ == request.Type_NotifyAt {
 		return w.notifyAt(req)
 	}
 	return nil
@@ -226,7 +227,7 @@ func (w *SimpleWorker) increOC(req *request.Request) error {
 		return err
 	}
 	newReq := request.Request{
-		Typ:  constants.RequestType_Ack,
+		Type: request.Type_Ack,
 		Edge: nil,
 		Ts:   timestamp.Timestamp{},
 		Msg:  request.Message{},
@@ -259,7 +260,7 @@ func (w *SimpleWorker) decreOC(req *request.Request) error {
 		return err
 	}
 	newReq := request.Request{
-		Typ:  constants.RequestType_Ack,
+		Type: request.Type_Ack,
 		Edge: nil,
 		Ts:   timestamp.Timestamp{},
 		Msg:  request.Message{},
@@ -277,7 +278,7 @@ func (w *SimpleWorker) sendBy(req *request.Request) error {
 		return err
 	}
 	newReq := request.Request{
-		Typ:  constants.RequestType_OnRecv,
+		Type: request.Type_OnRecv,
 		Edge: e,
 		Ts:   req.Ts,
 		Msg:  req.Msg,
@@ -294,7 +295,7 @@ func (w *SimpleWorker) notifyAt(req *request.Request) error {
 		return err
 	}
 	newReq := request.Request{
-		Typ:  constants.RequestType_OnNotify,
+		Type: request.Type_OnNotify,
 		Edge: e,
 		Ts:   req.Ts,
 		Msg:  req.Msg,

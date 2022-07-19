@@ -4,13 +4,19 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/stepneko/neko-dataflow/constants"
 	"github.com/stepneko/neko-dataflow/edge"
 	"github.com/stepneko/neko-dataflow/handles"
 	"github.com/stepneko/neko-dataflow/request"
 	"github.com/stepneko/neko-dataflow/scope"
 	"github.com/stepneko/neko-dataflow/timestamp"
 	"github.com/stepneko/neko-dataflow/utils"
+)
+
+type BinaryType int
+
+const (
+	BinaryType_Left  BinaryType = 0
+	BinaryType_Right BinaryType = 1
 )
 
 type BinaryHandle interface {
@@ -43,19 +49,19 @@ func (op *BinaryOpCore) Start(wg sync.WaitGroup) error {
 		case <-op.Done():
 			return nil
 		case req := <-op.handle1.MsgRecv():
-			if err := op.handleReq(&req, constants.BinaryType_Left); err != nil {
+			if err := op.handleReq(&req, BinaryType_Left); err != nil {
 				utils.Logger().Error(err.Error())
 			}
 		case req := <-op.handle2.MsgRecv():
-			if err := op.handleReq(&req, constants.BinaryType_Right); err != nil {
+			if err := op.handleReq(&req, BinaryType_Right); err != nil {
 				utils.Logger().Error(err.Error())
 			}
 		}
 	}
 }
 
-func (op *BinaryOpCore) handleReq(req *request.Request, bt constants.BinaryType) error {
-	typ := req.Typ
+func (op *BinaryOpCore) handleReq(req *request.Request, bt BinaryType) error {
+	typ := req.Type
 	edge := req.Edge
 	msg := req.Msg
 	ts := req.Ts
@@ -64,18 +70,18 @@ func (op *BinaryOpCore) handleReq(req *request.Request, bt constants.BinaryType)
 		return err
 	}
 
-	if typ == constants.RequestType_OnRecv {
-		if bt == constants.BinaryType_Left {
+	if typ == request.Type_OnRecv {
+		if bt == BinaryType_Left {
 			return op.OnRecv1(edge, &msg, ts)
-		} else if bt == constants.BinaryType_Right {
+		} else if bt == BinaryType_Right {
 			return op.OnRecv2(edge, &msg, ts)
 		} else {
 			return fmt.Errorf("invalid binary type with value: %d", bt)
 		}
-	} else if typ == constants.RequestType_OnNotify {
-		if bt == constants.BinaryType_Left {
+	} else if typ == request.Type_OnNotify {
+		if bt == BinaryType_Left {
 			return op.OnNotify1(ts)
-		} else if bt == constants.BinaryType_Right {
+		} else if bt == BinaryType_Right {
 			return op.OnNotify2(ts)
 		} else {
 			return fmt.Errorf("invalid binary type with value: %d", bt)

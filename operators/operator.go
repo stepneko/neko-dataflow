@@ -1,7 +1,6 @@
 package operators
 
 import (
-	"github.com/stepneko/neko-dataflow/constants"
 	"github.com/stepneko/neko-dataflow/edge"
 	"github.com/stepneko/neko-dataflow/iterator"
 	"github.com/stepneko/neko-dataflow/request"
@@ -23,7 +22,7 @@ type FilterCallback func(
 
 type Operator interface {
 	vertex.Vertex
-	SetTarget(vid constants.VertexId)
+	SetTarget(vid vertex.Id)
 	Binary(other Operator, f1 DataCallback, f2 DataCallback) BinaryOp
 	Inspect(f DataCallback) InspectOp
 	Filter(f FilterCallback) FilterOp
@@ -47,5 +46,5 @@ type DoubleInput interface {
 }
 
 type DoubleOutput interface {
-	SetTarget2(vid constants.VertexId)
+	SetTarget2(vid vertex.Id)
 }

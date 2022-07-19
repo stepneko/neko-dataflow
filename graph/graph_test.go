@@ -5,9 +5,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/stepneko/neko-dataflow/constants"
 	"github.com/stepneko/neko-dataflow/edge"
 	"github.com/stepneko/neko-dataflow/timestamp"
+	"github.com/stepneko/neko-dataflow/vertex"
 )
 
 // Build a sample graph to test on, and return
@@ -20,13 +20,13 @@ import (
 //
 func BuildGraph(t *testing.T, g *Graph) {
 	// Insert vertices
-	g.InsertVertex(1, constants.VertexType_Input)
-	g.InsertVertex(2, constants.VertexType_Ingress)
-	g.InsertVertex(3, constants.VertexType_Inspect)
-	g.InsertVertex(4, constants.VertexType_Inspect)
-	g.InsertVertex(5, constants.VertexType_Feedback)
-	g.InsertVertex(6, constants.VertexType_Egress)
-	g.InsertVertex(7, constants.VertexType_Inspect)
+	g.InsertVertex(1, vertex.Type_Input)
+	g.InsertVertex(2, vertex.Type_Ingress)
+	g.InsertVertex(3, vertex.Type_Inspect)
+	g.InsertVertex(4, vertex.Type_Inspect)
+	g.InsertVertex(5, vertex.Type_Feedback)
+	g.InsertVertex(6, vertex.Type_Egress)
+	g.InsertVertex(7, vertex.Type_Inspect)
 
 	// Insert edge
 	g.InsertEdge(edge.NewEdge(1, 2))
@@ -48,53 +48,53 @@ func BuildGraph(t *testing.T, g *Graph) {
 
 func TestInsertVertex(t *testing.T) {
 	g := NewGraph()
-	vid := constants.VertexId(1)
-	g.InsertVertex(vid, constants.VertexType_Input)
+	vid := vertex.Id(1)
+	g.InsertVertex(vid, vertex.Type_Input)
 
 	node, exist := g.VertexMap[vid]
 	assert.Equal(t, exist, true)
 	assert.Equal(t, node.Vid, vid)
-	assert.Equal(t, node.Typ, constants.VertexType_Input)
+	assert.Equal(t, node.Type, vertex.Type_Input)
 }
 
 func TestInsertEdge(t *testing.T) {
 	g := NewGraph()
-	vid1 := constants.VertexId(1)
-	vid2 := constants.VertexId(2)
-	g.InsertVertex(vid1, constants.VertexType_Input)
-	g.InsertVertex(vid2, constants.VertexType_Ingress)
+	vid1 := vertex.Id(1)
+	vid2 := vertex.Id(2)
+	g.InsertVertex(vid1, vertex.Type_Input)
+	g.InsertVertex(vid2, vertex.Type_Ingress)
 	g.InsertEdge(edge.NewEdge(vid1, vid2))
 
 	node1, exist := g.VertexMap[vid1]
 	assert.Equal(t, exist, true)
 	assert.Equal(t, node1.Vid, vid1)
-	assert.Equal(t, node1.Typ, constants.VertexType_Input)
+	assert.Equal(t, node1.Type, vertex.Type_Input)
 
 	node2, exist := g.VertexMap[vid2]
 	assert.Equal(t, exist, true)
 	assert.Equal(t, node2.Vid, vid2)
-	assert.Equal(t, node2.Typ, constants.VertexType_Ingress)
+	assert.Equal(t, node2.Type, vertex.Type_Ingress)
 
 	assert.Equal(t, len(node1.Children), 1)
 	assert.Equal(t, len(node2.Children), 0)
 
 	assert.Equal(t, node1.Children[node2], true)
 
-	vid3 := constants.VertexId(3)
-	g.InsertVertex(vid3, constants.VertexType_Egress)
+	vid3 := vertex.Id(3)
+	g.InsertVertex(vid3, vertex.Type_Egress)
 	g.InsertEdge(edge.NewEdge(vid2, vid3))
 
 	newNode2, exist := g.VertexMap[vid2]
 	assert.Equal(t, exist, true)
 	assert.Equal(t, newNode2, node2)
 	assert.Equal(t, newNode2.Vid, vid2)
-	assert.Equal(t, node2.Typ, constants.VertexType_Ingress)
+	assert.Equal(t, node2.Type, vertex.Type_Ingress)
 	assert.Equal(t, len(node2.Children), 1)
 
 	node3, exists := g.VertexMap[vid3]
 	assert.Equal(t, exists, true)
 	assert.Equal(t, node3.Vid, vid3)
-	assert.Equal(t, node3.Typ, constants.VertexType_Egress)
+	assert.Equal(t, node3.Type, vertex.Type_Egress)
 	assert.Equal(t, len(node3.Children), 0)
 
 	assert.Equal(t, node2.Children[node3], true)

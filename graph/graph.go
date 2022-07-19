@@ -4,21 +4,21 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/stepneko/neko-dataflow/constants"
 	"github.com/stepneko/neko-dataflow/edge"
 	"github.com/stepneko/neko-dataflow/timestamp"
+	"github.com/stepneko/neko-dataflow/vertex"
 )
 
 type Node struct {
-	Vid      constants.VertexId
-	Typ      constants.VertexType
+	Vid      vertex.Id
+	Type     vertex.Type
 	Children map[*Node]bool
 }
 
-func NewNode(vid constants.VertexId, typ constants.VertexType) *Node {
+func NewNode(vid vertex.Id, typ vertex.Type) *Node {
 	return &Node{
 		Vid:      vid,
-		Typ:      typ,
+		Type:     typ,
 		Children: make(map[*Node]bool),
 	}
 }
@@ -26,10 +26,7 @@ func NewNode(vid constants.VertexId, typ constants.VertexType) *Node {
 type Graph struct {
 	// A quick look up table to find Nodes in the graph
 	// given input vertex
-	VertexMap map[constants.VertexId]*Node
-	// Map recording if an edge from src vertex A to target vertex B is
-	// pointing to the left or right of the target B.
-	DirsMap map[constants.VertexId]map[constants.VertexId]constants.VertexInDir
+	VertexMap map[vertex.Id]*Node
 	// Occurrence counts and precursor counts map for pointstamps.
 	// Key should be pointstamp, but since pointstamp is a struct
 	// and is not natively hashable, we use string as key, which is the
@@ -39,13 +36,12 @@ type Graph struct {
 
 func NewGraph() *Graph {
 	return &Graph{
-		VertexMap:   make(map[constants.VertexId]*Node),
-		DirsMap:     make(map[constants.VertexId]map[constants.VertexId]constants.VertexInDir),
+		VertexMap:   make(map[vertex.Id]*Node),
 		ActivePsMap: make(map[string]*PointstampCounter),
 	}
 }
 
-func (g *Graph) InsertVertex(vid constants.VertexId, typ constants.VertexType) {
+func (g *Graph) InsertVertex(vid vertex.Id, typ vertex.Type) {
 	_, exist := g.VertexMap[vid]
 	if !exist {
 		node := NewNode(vid, typ)
@@ -69,18 +65,6 @@ func (g *Graph) InsertEdge(e edge.Edge) error {
 	srcNode.Children[targetNode] = true
 
 	return nil
-}
-
-func (g *Graph) GetDir(src constants.VertexId, target constants.VertexId) (constants.VertexInDir, error) {
-	m, exist := g.DirsMap[src]
-	if !exist {
-		return constants.VertexInDir_Default, errors.New("src not found in DirMap in graph")
-	}
-	dir, exist := m[target]
-	if !exist {
-		return constants.VertexInDir_Default, errors.New("target not found in DirMap in geraph")
-	}
-	return dir, nil
 }
 
 // When a pointstamp p becomes active, the scheduler initializes its precursor count
@@ -152,7 +136,7 @@ func (g *Graph) DecreOC(ps Pointstamp) error {
 func (g *Graph) CouldResultIn(a Pointstamp, b Pointstamp) (bool, error) {
 	// Traverse from pointstamp a until it reaches pointstamp b
 	// Therefore we pick target of a as starting point, until it reaches src of b
-	visited := make(map[constants.VertexId]*timestamp.Timestamp)
+	visited := make(map[vertex.Id]*timestamp.Timestamp)
 	srcId := a.GetTarget()
 	srcNode, exist := g.VertexMap[srcId]
 	if !exist {
@@ -161,7 +145,7 @@ func (g *Graph) CouldResultIn(a Pointstamp, b Pointstamp) (bool, error) {
 	// The srcTs is the timestamp getting out of the a edge.
 	// Therefore it has to be processed by target vertex of that edge.
 	srcTs := timestamp.CopyTimestampFrom(a.GetTimestamp())
-	timestamp.HandleTimestamp(srcNode.Typ, srcTs)
+	timestamp.HandleTimestamp(srcNode.Type, srcTs)
 	targetId := b.GetSrc()
 	_, exist = g.VertexMap[targetId]
 	if !exist {
@@ -199,7 +183,7 @@ func (g *Graph) CouldResultIn(a Pointstamp, b Pointstamp) (bool, error) {
 		for childNode := range currNode.Children {
 			// Handle timestamp according to the child vertex
 			newTs := timestamp.CopyTimestampFrom(currTs)
-			timestamp.HandleTimestamp(childNode.Typ, newTs)
+			timestamp.HandleTimestamp(childNode.Type, newTs)
 			newPs := NewVertexPointStamp(childNode.Vid, newTs)
 			queue = append(queue, newPs)
 		}
@@ -224,7 +208,7 @@ func (g *Graph) PreProcess() {
 	// drain from the computation.
 	for vertexId := range g.VertexMap {
 		vNode := g.VertexMap[vertexId]
-		if vNode.Typ == constants.VertexType_Input {
+		if vNode.Type == vertex.Type_Input {
 			ts := timestamp.NewTimestamp()
 			ps := NewVertexPointStamp(vertexId, ts)
 			g.ActivePsMap[ps.Hash()] = &PointstampCounter{

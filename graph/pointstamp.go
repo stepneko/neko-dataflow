@@ -1,10 +1,10 @@
 package graph
 
 import (
-	"github.com/stepneko/neko-dataflow/constants"
 	"github.com/stepneko/neko-dataflow/edge"
 	"github.com/stepneko/neko-dataflow/timestamp"
 	"github.com/stepneko/neko-dataflow/utils"
+	"github.com/stepneko/neko-dataflow/vertex"
 )
 
 // Pointstamp, as referred to in the paper, is a tuple with two types:
@@ -13,8 +13,8 @@ import (
 // We use Pointstamp as the interface, for which one must could get
 // src, target and timestamp for graph traversal.
 type Pointstamp interface {
-	GetSrc() constants.VertexId
-	GetTarget() constants.VertexId
+	GetSrc() vertex.Id
+	GetTarget() vertex.Id
 	GetTimestamp() *timestamp.Timestamp
 	Hash() string
 }
@@ -27,12 +27,12 @@ type PointstampCounter struct {
 
 // VertexPointStamp is a vertex based pointstamp
 type VertexPointStamp struct {
-	vertexId constants.VertexId
+	vertexId vertex.Id
 	ts       *timestamp.Timestamp
 }
 
 func NewVertexPointStamp(
-	vertexId constants.VertexId,
+	vertexId vertex.Id,
 	ts *timestamp.Timestamp,
 ) *VertexPointStamp {
 	return &VertexPointStamp{
@@ -41,11 +41,11 @@ func NewVertexPointStamp(
 	}
 }
 
-func (vps *VertexPointStamp) GetSrc() constants.VertexId {
+func (vps *VertexPointStamp) GetSrc() vertex.Id {
 	return vps.vertexId
 }
 
-func (vps *VertexPointStamp) GetTarget() constants.VertexId {
+func (vps *VertexPointStamp) GetTarget() vertex.Id {
 	return vps.vertexId
 }
 
@@ -75,11 +75,11 @@ func NewEdgePointStamp(
 	}
 }
 
-func (eps *EdgePointStamp) GetSrc() constants.VertexId {
+func (eps *EdgePointStamp) GetSrc() vertex.Id {
 	return eps.edge.GetSrc()
 }
 
-func (eps *EdgePointStamp) GetTarget() constants.VertexId {
+func (eps *EdgePointStamp) GetTarget() vertex.Id {
 	return eps.edge.GetTarget()
 }
 

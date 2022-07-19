@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/stepneko/neko-dataflow/constants"
 	"github.com/stepneko/neko-dataflow/utils"
+	"github.com/stepneko/neko-dataflow/vertex"
 )
 
 type Timestamp struct {
@@ -63,16 +63,16 @@ func (ts *Timestamp) ToString() string {
 	return fmt.Sprintf("Epoch: %d, Counters: %v", ts.Epoch, ts.Counters)
 }
 
-func HandleTimestamp(typ constants.VertexType, ts *Timestamp) error {
-	if typ == constants.VertexType_Ingress {
+func HandleTimestamp(typ vertex.Type, ts *Timestamp) error {
+	if typ == vertex.Type_Ingress {
 		ts.Counters = append(ts.Counters, 0)
-	} else if typ == constants.VertexType_Egress {
+	} else if typ == vertex.Type_Egress {
 		l := len(ts.Counters)
 		if l == 0 {
 			return errors.New("timestamp handling error in egress vertex. Counter already empty so cannot pop")
 		}
 		ts.Counters = ts.Counters[:l-1]
-	} else if typ == constants.VertexType_Feedback {
+	} else if typ == vertex.Type_Feedback {
 		l := len(ts.Counters)
 		if l == 0 {
 			return errors.New("timestamp handling error in feedback vertex. Counter already empty")

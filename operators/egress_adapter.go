@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/stepneko/neko-dataflow/constants"
 	"github.com/stepneko/neko-dataflow/edge"
 	"github.com/stepneko/neko-dataflow/handles"
 	"github.com/stepneko/neko-dataflow/request"
 	"github.com/stepneko/neko-dataflow/scope"
 	"github.com/stepneko/neko-dataflow/timestamp"
 	"github.com/stepneko/neko-dataflow/utils"
+	"github.com/stepneko/neko-dataflow/vertex"
 )
 
 type EgressAdapterHandle interface {
@@ -31,7 +31,7 @@ type EgressAdapterOp interface {
 type EgressAdapterOpCore struct {
 	*OpCore
 	handle  InputHandle
-	target2 constants.VertexId
+	target2 vertex.Id
 	f       FilterCallback
 }
 
@@ -50,7 +50,7 @@ func (op *EgressAdapterOpCore) Start(wg sync.WaitGroup) error {
 }
 
 func (op *EgressAdapterOpCore) handleReq(req *request.Request) error {
-	typ := req.Typ
+	typ := req.Type
 	edge := req.Edge
 	msg := req.Msg
 	ts := req.Ts
@@ -59,9 +59,9 @@ func (op *EgressAdapterOpCore) handleReq(req *request.Request) error {
 		return err
 	}
 
-	if typ == constants.RequestType_OnRecv {
+	if typ == request.Type_OnRecv {
 		return op.OnRecv(edge, &msg, ts)
-	} else if typ == constants.RequestType_OnNotify {
+	} else if typ == request.Type_OnNotify {
 		return op.OnNotify(ts)
 	} else {
 		return fmt.Errorf("invalid request type with value: %d", typ)
@@ -106,6 +106,6 @@ func (op *EgressAdapterOpCore) NotifyAt(ts timestamp.Timestamp) error {
 	return nil
 }
 
-func (op *EgressAdapterOpCore) SetTarget2(vid constants.VertexId) {
+func (op *EgressAdapterOpCore) SetTarget2(vid vertex.Id) {
 	op.target2 = vid
 }

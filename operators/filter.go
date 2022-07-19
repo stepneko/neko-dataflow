@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/stepneko/neko-dataflow/constants"
 	"github.com/stepneko/neko-dataflow/edge"
 	"github.com/stepneko/neko-dataflow/handles"
 	"github.com/stepneko/neko-dataflow/request"
@@ -48,7 +47,7 @@ func (op *FilterOpCore) Start(wg sync.WaitGroup) error {
 }
 
 func (op *FilterOpCore) handleReq(req *request.Request) error {
-	typ := req.Typ
+	typ := req.Type
 	edge := req.Edge
 	msg := req.Msg
 	ts := req.Ts
@@ -57,9 +56,9 @@ func (op *FilterOpCore) handleReq(req *request.Request) error {
 		return err
 	}
 
-	if typ == constants.RequestType_OnRecv {
+	if typ == request.Type_OnRecv {
 		return op.OnRecv(edge, &msg, ts)
-	} else if typ == constants.RequestType_OnNotify {
+	} else if typ == request.Type_OnNotify {
 		return op.OnNotify(ts)
 	} else {
 		return fmt.Errorf("invalid request type with value: %d", typ)
