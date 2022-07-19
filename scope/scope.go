@@ -1,7 +1,6 @@
 package scope
 
 import (
-	"github.com/stepneko/neko-dataflow/constants"
 	"github.com/stepneko/neko-dataflow/handles"
 	"github.com/stepneko/neko-dataflow/vertex"
 )
@@ -10,7 +9,7 @@ type Scope interface {
 	// Name returns the name of the scope
 	Name() string
 	// GenerateVID generates a unique vertex id for new vertex
-	GenerateVID() constants.VertexId
+	GenerateVID() vertex.Id
 	// GetWorkerHandle gets the handle of the worker
 	GetWorkerHandle() handles.WorkerHandle
 	// RegisterVertex registers a vertex with its handle to the scope

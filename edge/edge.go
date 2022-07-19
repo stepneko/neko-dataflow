@@ -1,22 +1,22 @@
 package edge
 
 import (
-	"github.com/stepneko/neko-dataflow/constants"
+	"github.com/stepneko/neko-dataflow/vertex"
 )
 
 type Edge interface {
-	GetSrc() constants.VertexId
-	GetTarget() constants.VertexId
+	GetSrc() vertex.Id
+	GetTarget() vertex.Id
 }
 
 type EdgeCore struct {
-	src    constants.VertexId
-	target constants.VertexId
+	src    vertex.Id
+	target vertex.Id
 }
 
 func NewEdge(
-	src constants.VertexId,
-	target constants.VertexId,
+	src vertex.Id,
+	target vertex.Id,
 ) *EdgeCore {
 	return &EdgeCore{
 		src,
@@ -24,10 +24,10 @@ func NewEdge(
 	}
 }
 
-func (e *EdgeCore) GetSrc() constants.VertexId {
+func (e *EdgeCore) GetSrc() vertex.Id {
 	return e.src
 }
 
-func (e *EdgeCore) GetTarget() constants.VertexId {
+func (e *EdgeCore) GetTarget() vertex.Id {
 	return e.target
 }

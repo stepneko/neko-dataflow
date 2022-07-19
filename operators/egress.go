@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/stepneko/neko-dataflow/constants"
 	"github.com/stepneko/neko-dataflow/edge"
 	"github.com/stepneko/neko-dataflow/handles"
 	"github.com/stepneko/neko-dataflow/request"
 	"github.com/stepneko/neko-dataflow/scope"
 	"github.com/stepneko/neko-dataflow/timestamp"
 	"github.com/stepneko/neko-dataflow/utils"
+	"github.com/stepneko/neko-dataflow/vertex"
 )
 
 type EgressHandle interface {
@@ -47,7 +47,7 @@ func (op *EgressOpCore) Start(wg sync.WaitGroup) error {
 }
 
 func (op *EgressOpCore) handleReq(req *request.Request) error {
-	typ := req.Typ
+	typ := req.Type
 	edge := req.Edge
 	msg := req.Msg
 	ts := req.Ts
@@ -56,9 +56,9 @@ func (op *EgressOpCore) handleReq(req *request.Request) error {
 		return err
 	}
 
-	if typ == constants.RequestType_OnRecv {
+	if typ == request.Type_OnRecv {
 		return op.OnRecv(edge, &msg, ts)
-	} else if typ == constants.RequestType_OnNotify {
+	} else if typ == request.Type_OnNotify {
 		return op.OnNotify(ts)
 	} else {
 		return fmt.Errorf("invalid request type with value: %d", typ)
@@ -71,7 +71,7 @@ func (op *EgressOpCore) OnRecv(e edge.Edge, msg *request.Message, ts timestamp.T
 	}
 
 	newTs := timestamp.CopyTimestampFrom(&ts)
-	if err := timestamp.HandleTimestamp(constants.VertexType_Egress, newTs); err != nil {
+	if err := timestamp.HandleTimestamp(vertex.Type_Egress, newTs); err != nil {
 		return err
 	}
 

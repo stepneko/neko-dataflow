@@ -10,6 +10,7 @@ import (
 	"github.com/stepneko/neko-dataflow/scope"
 	"github.com/stepneko/neko-dataflow/timestamp"
 	"github.com/stepneko/neko-dataflow/utils"
+	"github.com/stepneko/neko-dataflow/vertex"
 )
 
 type InputHandle interface {
@@ -42,7 +43,7 @@ func NewInput(s scope.Scope, inputCh chan request.InputDatum) InputOp {
 	vid := s.GenerateVID()
 
 	v := &InputOpCore{
-		OpCore:  NewOpCore(vid, constants.VertexType_Input, s),
+		OpCore:  NewOpCore(vid, vertex.Type_Input, s),
 		handle:  handle,
 		inputCh: inputCh,
 	}

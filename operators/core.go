@@ -10,19 +10,20 @@ import (
 	"github.com/stepneko/neko-dataflow/request"
 	"github.com/stepneko/neko-dataflow/scope"
 	"github.com/stepneko/neko-dataflow/timestamp"
+	"github.com/stepneko/neko-dataflow/vertex"
 )
 
 type OpCore struct {
 	scope.Scope
-	id     constants.VertexId
-	typ    constants.VertexType
+	id     vertex.Id
+	typ    vertex.Type
 	currTs timestamp.Timestamp
-	target constants.VertexId
+	target vertex.Id
 }
 
 func NewOpCore(
-	vid constants.VertexId,
-	typ constants.VertexType,
+	vid vertex.Id,
+	typ vertex.Type,
 	scope scope.Scope,
 ) *OpCore {
 	return &OpCore{
@@ -30,16 +31,16 @@ func NewOpCore(
 		id:     vid,
 		typ:    typ,
 		currTs: *timestamp.NewTimestamp(),
-		target: constants.VertexId_Nil,
+		target: vertex.Id_Nil,
 	}
 }
 
 // ===================== Impl Vertex interface ================== //
-func (op *OpCore) Id() constants.VertexId {
+func (op *OpCore) Id() vertex.Id {
 	return op.id
 }
 
-func (op *OpCore) Type() constants.VertexType {
+func (op *OpCore) Type() vertex.Type {
 	return op.typ
 }
 
@@ -53,7 +54,7 @@ func (op *OpCore) AsScope() scope.Scope {
 	return op.Scope
 }
 
-func (op *OpCore) SetTarget(vid constants.VertexId) {
+func (op *OpCore) SetTarget(vid vertex.Id) {
 	op.target = vid
 }
 
@@ -69,7 +70,7 @@ func (op *OpCore) Inspect(f DataCallback) InspectOp {
 	vid := s.GenerateVID()
 
 	v := &InspectOpCore{
-		OpCore: NewOpCore(vid, constants.VertexType_Inspect, s),
+		OpCore: NewOpCore(vid, vertex.Type_Inspect, s),
 		handle: handle,
 		f:      f,
 	}
@@ -96,7 +97,7 @@ func (op *OpCore) Binary(other Operator, f1 DataCallback, f2 DataCallback) Binar
 	vid := s.GenerateVID()
 
 	v := &BinaryOpCore{
-		OpCore:  NewOpCore(vid, constants.VertexType_Bianry, s),
+		OpCore:  NewOpCore(vid, vertex.Type_Bianry, s),
 		handle1: handle1,
 		handle2: handle2,
 
@@ -124,7 +125,7 @@ func (op *OpCore) Filter(f FilterCallback) FilterOp {
 	vid := s.GenerateVID()
 
 	v := &FilterOpCore{
-		OpCore: NewOpCore(vid, constants.VertexType_Inspect, s),
+		OpCore: NewOpCore(vid, vertex.Type_Inspect, s),
 		handle: handle,
 		f:      f,
 	}
@@ -153,7 +154,7 @@ func (op *OpCore) Loop(dataF func(ups Operator) Operator, filterF FilterCallback
 	ingressVid := s.GenerateVID()
 
 	ingressOp := &IngressOpCore{
-		OpCore: NewOpCore(ingressVid, constants.VertexType_Ingress, s),
+		OpCore: NewOpCore(ingressVid, vertex.Type_Ingress, s),
 		handle: ingressHandle,
 	}
 
@@ -174,7 +175,7 @@ func (op *OpCore) Loop(dataF func(ups Operator) Operator, filterF FilterCallback
 	ingressAdpVid := s.GenerateVID()
 
 	ingressAdpOp := &IngressAdapterOpCore{
-		OpCore:  NewOpCore(ingressAdpVid, constants.VertexType_IngressAdapter, s),
+		OpCore:  NewOpCore(ingressAdpVid, vertex.Type_IngressAdapter, s),
 		handle1: ingressAdpHandle1,
 		handle2: ingressAdpHandle2,
 	}
@@ -195,9 +196,9 @@ func (op *OpCore) Loop(dataF func(ups Operator) Operator, filterF FilterCallback
 	egressAdpVid := s.GenerateVID()
 
 	egressAdpOp := &EgressAdapterOpCore{
-		OpCore:  NewOpCore(egressAdpVid, constants.VertexType_EgressAdapter, s),
+		OpCore:  NewOpCore(egressAdpVid, vertex.Type_EgressAdapter, s),
 		handle:  egressAdpHandle,
-		target2: constants.VertexId_Nil,
+		target2: vertex.Id_Nil,
 		f:       filterF,
 	}
 
@@ -214,7 +215,7 @@ func (op *OpCore) Loop(dataF func(ups Operator) Operator, filterF FilterCallback
 	feedbackVid := s.GenerateVID()
 
 	feedbackOp := &FeedbackOpCore{
-		OpCore: NewOpCore(feedbackVid, constants.VertexType_Feedback, s),
+		OpCore: NewOpCore(feedbackVid, vertex.Type_Feedback, s),
 		handle: feedbackHandle,
 	}
 
@@ -234,7 +235,7 @@ func (op *OpCore) Loop(dataF func(ups Operator) Operator, filterF FilterCallback
 	egressVid := s.GenerateVID()
 
 	egressOp := &EgressOpCore{
-		OpCore: NewOpCore(egressVid, constants.VertexType_Egress, s),
+		OpCore: NewOpCore(egressVid, vertex.Type_Egress, s),
 		handle: egressHandle,
 	}
 
@@ -253,7 +254,7 @@ func (op *OpCore) coreSendBy(
 	handle handles.VertexHandle,
 ) error {
 	// If no target specified for this operator, then no need to send the message
-	if e.GetTarget() == constants.VertexId_Nil {
+	if e.GetTarget() == vertex.Id_Nil {
 		return nil
 	}
 
@@ -263,7 +264,7 @@ func (op *OpCore) coreSendBy(
 
 	// Send the actual message to worker
 	req := request.Request{
-		Typ:  constants.RequestType_SendBy,
+		Type: request.Type_SendBy,
 		Edge: e,
 		Msg:  *msg,
 		Ts:   ts,
@@ -281,7 +282,7 @@ func (op *OpCore) coreIncreOC(
 ) error {
 	// Handle IncreOC first
 	incReq := request.Request{
-		Typ:  constants.RequestType_IncreOC,
+		Type: request.Type_IncreOC,
 		Edge: e,
 		Msg:  *request.NewMessage([]byte{}),
 		Ts:   ts,
@@ -300,7 +301,7 @@ func (op *OpCore) coreDecreOC(
 ) error {
 	// Handle DecreOC first
 	req := request.Request{
-		Typ:  constants.RequestType_DecreOC,
+		Type: request.Type_DecreOC,
 		Edge: e,
 		Msg:  *request.NewMessage([]byte{}),
 		Ts:   ts,
