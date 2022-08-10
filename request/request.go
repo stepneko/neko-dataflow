@@ -8,14 +8,13 @@ import (
 type Type int
 
 const (
-	Type_SendBy   Type = 0 //  Function signature for SendBy
-	Type_NotifyAt Type = 1 //  Function signature for NotifyAt
-	Type_OnRecv   Type = 2 //  Function signature for OnRecv
-	Type_OnNotify Type = 3 //  Function signature for OnNotify
-
-	Type_IncreOC Type = 4 //  Function signature to increment occurrence count
-	Type_DecreOC Type = 5 //  Function signature to decrement occurrence count
-	Type_Ack     Type = 6 //  Function signature to ack
+	Type_SendBy   Type = iota //  Function signature for SendBy
+	Type_NotifyAt             //  Function signature for NotifyAt
+	Type_OnRecv               //  Function signature for OnRecv
+	Type_OnNotify             //  Function signature for OnNotify
+	Type_IncreOC              //  Function signature to increment occurrence count
+	Type_DecreOC              //  Function signature to decrement occurrence count
+	Type_Ack                  //  Function signature to ack
 )
 
 // Request represents a call between vertices and scheduler.
