@@ -16,7 +16,7 @@ type SimpleWorkerHandle struct {
 
 func NewSimpleWorkerHandle() *SimpleWorkerHandle {
 	return &SimpleWorkerHandle{
-		ch: make(chan request.Request, constants.ChanCacapity),
+		ch: make(chan request.Request, constants.ChanCapacity),
 	}
 }
 

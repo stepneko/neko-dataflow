@@ -35,8 +35,8 @@ type InputOpCore struct {
 
 // NewInput creates input operator from scope
 func NewInput(s scope.Scope, inputCh chan request.InputDatum) InputOp {
-	taskCh := make(chan request.Request, constants.ChanCacapity)
-	ackCh := make(chan request.Request, constants.ChanCacapity)
+	taskCh := make(chan request.Request, constants.ChanCapacity)
+	ackCh := make(chan request.Request, constants.ChanCapacity)
 
 	handle := handles.NewLocalVertexHandle(taskCh, ackCh)
 
