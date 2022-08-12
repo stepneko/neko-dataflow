@@ -61,9 +61,9 @@ func (op *OpCore) SetTarget(vid vertex.Id) {
 func (op *OpCore) Inspect(f DataCallback) InspectOp {
 	s := op.AsScope()
 
-	taskCh := make(chan request.Request, constants.ChanCacapity)
+	taskCh := make(chan request.Request, constants.ChanCapacity)
 
-	ackCh := make(chan request.Request, constants.ChanCacapity)
+	ackCh := make(chan request.Request, constants.ChanCapacity)
 
 	handle := handles.NewLocalVertexHandle(taskCh, ackCh)
 
@@ -85,11 +85,11 @@ func (op *OpCore) Inspect(f DataCallback) InspectOp {
 func (op *OpCore) Binary(other Operator, f1 DataCallback, f2 DataCallback) BinaryOp {
 	s := op.AsScope()
 
-	taskCh1 := make(chan request.Request, constants.ChanCacapity)
-	taskCh2 := make(chan request.Request, constants.ChanCacapity)
+	taskCh1 := make(chan request.Request, constants.ChanCapacity)
+	taskCh2 := make(chan request.Request, constants.ChanCapacity)
 
-	ackCh1 := make(chan request.Request, constants.ChanCacapity)
-	ackCh2 := make(chan request.Request, constants.ChanCacapity)
+	ackCh1 := make(chan request.Request, constants.ChanCapacity)
+	ackCh2 := make(chan request.Request, constants.ChanCapacity)
 
 	handle1 := handles.NewLocalVertexHandle(taskCh1, ackCh1)
 	handle2 := handles.NewLocalVertexHandle(taskCh2, ackCh2)
@@ -116,9 +116,9 @@ func (op *OpCore) Binary(other Operator, f1 DataCallback, f2 DataCallback) Binar
 func (op *OpCore) Filter(f FilterCallback) FilterOp {
 	s := op.AsScope()
 
-	taskCh := make(chan request.Request, constants.ChanCacapity)
+	taskCh := make(chan request.Request, constants.ChanCapacity)
 
-	ackCh := make(chan request.Request, constants.ChanCacapity)
+	ackCh := make(chan request.Request, constants.ChanCapacity)
 
 	handle := handles.NewLocalVertexHandle(taskCh, ackCh)
 
@@ -146,8 +146,8 @@ func (op *OpCore) Loop(dataF func(ups Operator) Operator, filterF FilterCallback
 	s := op.AsScope()
 
 	// Create ingress operator
-	ingressTaskCh1 := make(chan request.Request, constants.ChanCacapity)
-	ingressAckCh1 := make(chan request.Request, constants.ChanCacapity)
+	ingressTaskCh1 := make(chan request.Request, constants.ChanCapacity)
+	ingressAckCh1 := make(chan request.Request, constants.ChanCapacity)
 
 	ingressHandle := handles.NewLocalVertexHandle(ingressTaskCh1, ingressAckCh1)
 
@@ -163,11 +163,11 @@ func (op *OpCore) Loop(dataF func(ups Operator) Operator, filterF FilterCallback
 	op.SetTarget(ingressVid)
 
 	// Create ingress adapter operator
-	ingressAdpTaskCh1 := make(chan request.Request, constants.ChanCacapity)
-	ingressAdpTaskCh2 := make(chan request.Request, constants.ChanCacapity)
+	ingressAdpTaskCh1 := make(chan request.Request, constants.ChanCapacity)
+	ingressAdpTaskCh2 := make(chan request.Request, constants.ChanCapacity)
 
-	ingressAdpAckCh1 := make(chan request.Request, constants.ChanCacapity)
-	ingressAdpAckCh2 := make(chan request.Request, constants.ChanCacapity)
+	ingressAdpAckCh1 := make(chan request.Request, constants.ChanCapacity)
+	ingressAdpAckCh2 := make(chan request.Request, constants.ChanCapacity)
 
 	ingressAdpHandle1 := handles.NewLocalVertexHandle(ingressAdpTaskCh1, ingressAdpAckCh1)
 	ingressAdpHandle2 := handles.NewLocalVertexHandle(ingressAdpTaskCh2, ingressAdpAckCh2)
@@ -188,8 +188,8 @@ func (op *OpCore) Loop(dataF func(ups Operator) Operator, filterF FilterCallback
 	tailOp := dataF(ingressAdpOp)
 
 	// Create egress adapter operator
-	egressAdpTaskCh := make(chan request.Request, constants.ChanCacapity)
-	egressAdpAckCh := make(chan request.Request, constants.ChanCacapity)
+	egressAdpTaskCh := make(chan request.Request, constants.ChanCapacity)
+	egressAdpAckCh := make(chan request.Request, constants.ChanCapacity)
 
 	egressAdpHandle := handles.NewLocalVertexHandle(egressAdpTaskCh, egressAdpAckCh)
 
@@ -207,8 +207,8 @@ func (op *OpCore) Loop(dataF func(ups Operator) Operator, filterF FilterCallback
 	tailOp.SetTarget(egressAdpVid)
 
 	// Create feedback operator
-	feedbackTaskCh := make(chan request.Request, constants.ChanCacapity)
-	feedbackAckCh := make(chan request.Request, constants.ChanCacapity)
+	feedbackTaskCh := make(chan request.Request, constants.ChanCapacity)
+	feedbackAckCh := make(chan request.Request, constants.ChanCapacity)
 
 	feedbackHandle := handles.NewLocalVertexHandle(feedbackTaskCh, feedbackAckCh)
 
@@ -227,8 +227,8 @@ func (op *OpCore) Loop(dataF func(ups Operator) Operator, filterF FilterCallback
 	feedbackOp.SetTarget(ingressAdpVid)
 
 	// Create egress adapter
-	egressTaskCh := make(chan request.Request, constants.ChanCacapity)
-	egressAckCh := make(chan request.Request, constants.ChanCacapity)
+	egressTaskCh := make(chan request.Request, constants.ChanCapacity)
+	egressAckCh := make(chan request.Request, constants.ChanCapacity)
 
 	egressHandle := handles.NewLocalVertexHandle(egressTaskCh, egressAckCh)
 
