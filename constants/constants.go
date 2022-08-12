@@ -1,3 +1,3 @@
 package constants
 
-const ChanCacapity int = 1024
+const ChanCapacity int = 1024
