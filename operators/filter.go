@@ -32,7 +32,7 @@ type FilterOpCore struct {
 	f      FilterCallback
 }
 
-func (op *FilterOpCore) Start(wg sync.WaitGroup) error {
+func (op *FilterOpCore) Start(wg *sync.WaitGroup) error {
 	defer wg.Done()
 	for {
 		select {

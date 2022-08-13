@@ -35,7 +35,7 @@ type EgressAdapterOpCore struct {
 	f       FilterCallback
 }
 
-func (op *EgressAdapterOpCore) Start(wg sync.WaitGroup) error {
+func (op *EgressAdapterOpCore) Start(wg *sync.WaitGroup) error {
 	defer wg.Done()
 	for {
 		select {

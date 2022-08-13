@@ -42,7 +42,7 @@ type BinaryOpCore struct {
 	f2 DataCallback
 }
 
-func (op *BinaryOpCore) Start(wg sync.WaitGroup) error {
+func (op *BinaryOpCore) Start(wg *sync.WaitGroup) error {
 	defer wg.Done()
 	for {
 		select {
