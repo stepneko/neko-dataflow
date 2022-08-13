@@ -32,7 +32,7 @@ type IngressAdapterOpCore struct {
 	handle2 IngressAdapterHandle
 }
 
-func (op *IngressAdapterOpCore) Start(wg sync.WaitGroup) error {
+func (op *IngressAdapterOpCore) Start(wg *sync.WaitGroup) error {
 	defer wg.Done()
 	for {
 		select {

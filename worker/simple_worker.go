@@ -64,11 +64,11 @@ func (w *SimpleWorker) Run() error {
 	for id := range w.vertices {
 		wg.Add(1)
 		v := w.vertices[id]
-		go v.Start(wg)
+		go v.Start(&wg)
 	}
 
 	wg.Add(1)
-	go w.serve(wg)
+	go w.serve(&wg)
 
 	wg.Wait()
 
@@ -176,7 +176,7 @@ func (w *SimpleWorker) handleReq(req *request.Request) error {
 	return nil
 }
 
-func (w *SimpleWorker) serve(wg sync.WaitGroup) error {
+func (w *SimpleWorker) serve(wg *sync.WaitGroup) error {
 	defer wg.Done()
 	ch := w.handle.Recv()
 	for {

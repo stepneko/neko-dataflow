@@ -52,7 +52,7 @@ func NewInput(s scope.Scope, inputCh chan request.InputDatum) InputOp {
 	return v
 }
 
-func (op *InputOpCore) Start(wg sync.WaitGroup) error {
+func (op *InputOpCore) Start(wg *sync.WaitGroup) error {
 	defer wg.Done()
 	for {
 		select {

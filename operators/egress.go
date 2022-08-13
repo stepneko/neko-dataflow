@@ -32,7 +32,7 @@ type EgressOpCore struct {
 	handle InputHandle
 }
 
-func (op *EgressOpCore) Start(wg sync.WaitGroup) error {
+func (op *EgressOpCore) Start(wg *sync.WaitGroup) error {
 	defer wg.Done()
 	for {
 		select {

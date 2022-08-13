@@ -44,7 +44,7 @@ func (op *OpCore) Type() vertex.Type {
 	return op.typ
 }
 
-func (op *OpCore) Start(wg sync.WaitGroup) error {
+func (op *OpCore) Start(wg *sync.WaitGroup) error {
 	return errors.New("raw opcore trying to run Start() with no operater specific Start()")
 }
 

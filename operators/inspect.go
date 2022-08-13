@@ -28,11 +28,11 @@ type InspectOp interface {
 
 type InspectOpCore struct {
 	*OpCore
-	handle InputHandle
+	handle InspectHandle
 	f      DataCallback
 }
 
-func (op *InspectOpCore) Start(wg sync.WaitGroup) error {
+func (op *InspectOpCore) Start(wg *sync.WaitGroup) error {
 	defer wg.Done()
 	for {
 		select {

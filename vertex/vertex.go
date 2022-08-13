@@ -28,5 +28,5 @@ type Vertex interface {
 	// Get Type of the vertex.
 	Type() Type
 	// Start starts the vertex.
-	Start(wg sync.WaitGroup) error
+	Start(wg *sync.WaitGroup) error
 }

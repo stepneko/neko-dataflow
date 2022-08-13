@@ -32,7 +32,7 @@ type FeedbackOpCore struct {
 	handle InputHandle
 }
 
-func (op *FeedbackOpCore) Start(wg sync.WaitGroup) error {
+func (op *FeedbackOpCore) Start(wg *sync.WaitGroup) error {
 	defer wg.Done()
 	for {
 		select {
